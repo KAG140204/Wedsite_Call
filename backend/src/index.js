@@ -7,9 +7,9 @@ const app = new Hono()
 // Apply CORS to all routes
 app.use('/*', cors({
   origin: (origin) => {
-    // Chỉ cho phép localhost (dev) và kaysor-call.pages.dev (prod) gọi API
+    // Chỉ cho phép localhost (dev), kaysor-call.pages.dev (mới) và wedsite-call.pages.dev (hiện tại) gọi API
     if (!origin) return 'https://kaysor-call.pages.dev';
-    if (origin.includes('localhost') || origin.includes('kaysor-call.pages.dev')) {
+    if (origin.includes('localhost') || origin.includes('kaysor-call.pages.dev') || origin.includes('wedsite-call.pages.dev')) {
       return origin;
     }
     return 'https://kaysor-call.pages.dev';
