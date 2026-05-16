@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall, X } from 'lucide-react';
-import GooeyProfileMenu from '../components/GooeyProfileMenu';
+import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall } from 'lucide-react';
 
 export default function Home() {
   const [roomId, setRoomId] = useState('');
@@ -13,25 +12,12 @@ export default function Home() {
   const [myRooms, setMyRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   
-  const { user, updateUser, token } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
-
-  // Modal States
-  const [showNameModal, setShowNameModal] = useState(false);
-  const [showPassModal, setShowPassModal] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [oldPass, setOldPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profileError, setProfileError] = useState('');
-  const [profileSuccess, setProfileSuccess] = useState('');
 
   useEffect(() => {
     if (!user) navigate('/login');
-    else {
-      setNewName(user.name);
-      fetchMyRooms();
-    }
+    else fetchMyRooms();
   }, [user, navigate]);
 
   const fetchMyRooms = async () => {
@@ -108,33 +94,6 @@ export default function Home() {
       setMyRooms(prev => prev.filter(r => r.roomId !== roomIdToLeave));
     } catch (err) {
       console.error(err);
-    }
-  };
-
-  const updateProfile = async (bodyData) => {
-    setProfileLoading(true); setProfileError(''); setProfileSuccess('');
-    try {
-      const res = await fetch('http://127.0.0.1:8787/api/user/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(bodyData)
-      });
-      const data = await res.json();
-      if (data.success) {
-        setProfileSuccess(data.message);
-        if (data.name) updateUser({ name: data.name });
-        setTimeout(() => {
-          setShowNameModal(false);
-          setShowPassModal(false);
-          setProfileSuccess('');
-        }, 1500);
-      } else {
-        setProfileError(data.error);
-      }
-    } catch (err) {
-      setProfileError('Lỗi kết nối máy chủ');
-    } finally {
-      setProfileLoading(false);
     }
   };
 
@@ -238,49 +197,6 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {/* Tích hợp Nút Menu Nảy (Gooey Profile Menu) trôi nổi */}
-      <GooeyProfileMenu 
-        onUpdateName={() => { setShowNameModal(true); setProfileError(''); setProfileSuccess(''); setNewName(user.name); }} 
-        onUpdatePassword={() => { setShowPassModal(true); setProfileError(''); setProfileSuccess(''); setOldPass(''); setNewPass(''); }} 
-      />
-
-      {/* --- MODALS --- */}
-      {showNameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel p-6 rounded-2xl w-full max-w-sm relative">
-            <button onClick={() => setShowNameModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-bold text-white mb-4">Đổi Tên Hiển Thị</h3>
-            <div className="space-y-4">
-              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none" placeholder="Tên mới..." />
-              {profileError && <p className="text-red-400 text-sm">{profileError}</p>}
-              {profileSuccess && <p className="text-green-400 text-sm">{profileSuccess}</p>}
-              <button onClick={() => updateProfile({ newName })} disabled={profileLoading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-medium transition-colors">
-                {profileLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPassModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="glass-panel p-6 rounded-2xl w-full max-w-sm relative">
-            <button onClick={() => setShowPassModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
-            <h3 className="text-xl font-bold text-white mb-4">Đổi Mật Khẩu</h3>
-            <div className="space-y-4">
-              <input type="password" value={oldPass} onChange={e => setOldPass(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 focus:outline-none" placeholder="Mật khẩu cũ" />
-              <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 focus:outline-none" placeholder="Mật khẩu mới" />
-              {profileError && <p className="text-red-400 text-sm">{profileError}</p>}
-              {profileSuccess && <p className="text-green-400 text-sm">{profileSuccess}</p>}
-              <button onClick={() => updateProfile({ oldPassword: oldPass, newPassword: newPass })} disabled={profileLoading} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-3 rounded-xl font-medium transition-colors">
-                {profileLoading ? 'Đang lưu...' : 'Cập Nhật Mật Khẩu'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

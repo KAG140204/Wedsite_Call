@@ -1,34 +1,38 @@
 import { useState } from 'react';
-import { User, Edit3, Key, LogOut } from 'lucide-react';
+import { Globe, Home, User, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import './GooeyProfileMenu.css'; // Sẽ tạo file CSS riêng để xử lý hiệu ứng
+import { useLocation, useNavigate } from 'react-router-dom';
+import './GooeyProfileMenu.css';
 
-export default function GooeyProfileMenu({ onUpdateName, onUpdatePassword }) {
+export default function GooeyProfileMenu() {
   const { logout, user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Xử lý đóng mở Menu
+  // Không hiển thị Menu ở trang Login hoặc Register hoặc nếu chưa đăng nhập
+  if (!user || ['/login', '/register'].includes(location.pathname)) {
+    return null;
+  }
+
   const handleToggle = () => setIsOpen(!isOpen);
 
-  const handleAction = (action) => {
+  const handleNavigate = (path) => {
     setIsOpen(false);
-    if (action === 'logout') {
-      logout();
-      window.location.href = '/login';
-    } else if (action === 'name') {
-      onUpdateName();
-    } else if (action === 'password') {
-      onUpdatePassword();
-    }
+    navigate(path);
+  };
+
+  const handleLogout = () => {
+    setIsOpen(false);
+    logout();
+    navigate('/login');
   };
 
   return (
     <div className="fixed bottom-8 right-8 z-50">
       <nav className="gooey-menu text-white">
-        {/* Checkbox ẩn để quản lý State đóng/mở bằng CSS thuần (giữ nguyên gốc) */}
         <input 
           type="checkbox" 
-          href="#" 
           className="menu-open" 
           name="menu-open" 
           id="menu-open" 
@@ -42,18 +46,28 @@ export default function GooeyProfileMenu({ onUpdateName, onUpdatePassword }) {
           <span className="lines line-3"></span>
         </label>
 
-        <button onClick={() => handleAction('name')} className="menu-item bg-blue-500 hover:bg-blue-400" title="Đổi Tên Hiển Thị">
-          <Edit3 className="w-5 h-5 text-white" />
+        {/* Nút 1: Trang Giới Thiệu */}
+        <button onClick={() => handleNavigate('/')} className="menu-item bg-teal-500 hover:bg-teal-400" title="Trang Giới Thiệu">
+          <Globe className="w-5 h-5 text-white" />
         </button>
-        <button onClick={() => handleAction('password')} className="menu-item bg-pink-500 hover:bg-pink-400" title="Đổi Mật Khẩu">
-          <Key className="w-5 h-5 text-white" />
+        
+        {/* Nút 2: Sảnh Quản Lý Nhóm */}
+        <button onClick={() => handleNavigate('/home')} className="menu-item bg-blue-500 hover:bg-blue-400" title="Sảnh Nhóm">
+          <Home className="w-5 h-5 text-white" />
         </button>
-        <button onClick={() => handleAction('logout')} className="menu-item bg-red-500 hover:bg-red-400" title="Đăng Xuất">
+        
+        {/* Nút 3: Hồ sơ Cá Nhân */}
+        <button onClick={() => handleNavigate('/profile')} className="menu-item bg-pink-500 hover:bg-pink-400" title="Trang Cá Nhân">
+          <User className="w-5 h-5 text-white" />
+        </button>
+        
+        {/* Nút 4: Đăng Xuất */}
+        <button onClick={handleLogout} className="menu-item bg-red-500 hover:bg-red-400" title="Đăng Xuất">
           <LogOut className="w-5 h-5 text-white ml-1" />
         </button>
       </nav>
 
-      {/* SVG Filter bắt buộc phải có để tạo hiệu ứng "Chất Lỏng" (Gooey Effect) */}
+      {/* SVG Filter cho hiệu ứng Gooey */}
       <svg width="0" height="0" className="absolute">
         <defs>
           <filter id="shadowed-goo">
@@ -63,11 +77,6 @@ export default function GooeyProfileMenu({ onUpdateName, onUpdatePassword }) {
             <feColorMatrix in="shadow" mode="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 -0.2" result="shadow" />
             <feOffset in="shadow" dx="1" dy="1" result="shadow" />
             <feComposite in2="shadow" in="goo" result="goo" />
-            <feComposite in2="goo" in="SourceGraphic" result="mix" />
-          </filter>
-          <filter id="goo">
-            <feGaussianBlur in="SourceGraphic" result="blur" stdDeviation="10" />
-            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
             <feComposite in2="goo" in="SourceGraphic" result="mix" />
           </filter>
         </defs>

@@ -6,16 +6,22 @@ import CallRoom from './pages/CallRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import Home from './pages/Home';
 import Landing from './pages/Landing';
+import Profile from './pages/Profile';
+import GooeyProfileMenu from './components/GooeyProfileMenu';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
+        {/* Gooey Profile Menu sẽ luôn hiển thị ở góc dưới màn hình trên toàn hệ thống (nếu đã đăng nhập) */}
+        <GooeyProfileMenu />
+        
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/home" element={<Home />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="/room/:roomId" element={<CallRoom />} />
           <Route path="/admin" element={<AdminDashboard />} />
           

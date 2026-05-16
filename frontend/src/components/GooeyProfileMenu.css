@@ -93,35 +93,36 @@
   background: #4b5563;
   color: white;
 }
-.menu-item:nth-child(3) {
-  transition-duration: 180ms;
-}
-.menu-item:nth-child(4) {
-  transition-duration: 180ms;
-}
-.menu-item:nth-child(5) {
-  transition-duration: 180ms;
-}
+.menu-item:nth-child(3) { transition-duration: 180ms; }
+.menu-item:nth-child(4) { transition-duration: 180ms; }
+.menu-item:nth-child(5) { transition-duration: 180ms; }
+.menu-item:nth-child(6) { transition-duration: 180ms; }
 
-/* Nảy các nút con lên trên khi mở menu */
+/* Nảy các nút con lên trên khi mở menu (Lan tỏa hình cánh quạt) */
 .menu-open:checked ~ .menu-item {
   transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .menu-open:checked ~ .menu-item:nth-child(3) {
   transition-duration: 190ms;
-  /* Bắn lên trên - cao nhất */
-  transform: translate3d(0, -160px, 0);
+  /* Bắn lên thẳng trên */
+  transform: translate3d(0, -130px, 0);
 }
 
 .menu-open:checked ~ .menu-item:nth-child(4) {
-  transition-duration: 290ms;
-  /* Bắn lên trên - giữa */
-  transform: translate3d(0, -80px, 0);
+  transition-duration: 240ms;
+  /* Bắn chéo lên (Nghiêng trên) */
+  transform: translate3d(-65px, -110px, 0);
 }
 
 .menu-open:checked ~ .menu-item:nth-child(5) {
-  transition-duration: 390ms;
-  /* Bắn chéo sang trái */
-  transform: translate3d(-70px, -40px, 0);
+  transition-duration: 290ms;
+  /* Bắn chéo qua trái (Nghiêng trái) */
+  transform: translate3d(-110px, -65px, 0);
+}
+
+.menu-open:checked ~ .menu-item:nth-child(6) {
+  transition-duration: 340ms;
+  /* Bắn thẳng sang ngang trái */
+  transform: translate3d(-130px, 0, 0);
 }
