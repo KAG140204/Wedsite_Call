@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, Settings, MessageSquare, Users, LogOut, Edit2, UserMinus } from 'lucide-react';
+import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
@@ -40,12 +40,24 @@ export default function CallRoom() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState('');
 
+  // --- CHAT STATE ---
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const messagesEndRef = useRef(null);
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
   const wsRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+
+  // Cuộn xuống dòng tin nhắn mới nhất
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isChatOpen]);
 
   useEffect(() => {
     if (!user) {
@@ -72,14 +84,12 @@ export default function CallRoom() {
         });
 
         peer.on('call', (call) => {
-          // Khi có người gọi tới, trả lời bằng stream của mình
           call.answer(stream);
           call.on('stream', (userVideoStream) => {
             setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
           });
         });
 
-        // Cập nhật trạng thái thiết bị ban đầu (có thể lưu từ localStorage)
         stream.getAudioTracks()[0].enabled = micOn;
         stream.getVideoTracks()[0].enabled = videoOn;
       } catch (err) {
@@ -111,7 +121,6 @@ export default function CallRoom() {
 
         switch (data.type) {
           case 'user_joined':
-            // Có người mới -> gọi cho họ
             if (data.user.id !== user.id) {
               setParticipants(data.participants.filter(p => p.id !== user.id));
               if (localStreamRef.current && peerRef.current) {
@@ -137,6 +146,20 @@ export default function CallRoom() {
             alert('Bạn đã bị chủ phòng mời ra khỏi cuộc gọi!');
             handleLeave();
             break;
+          // --- CHAT EVENTS ---
+          case 'chat_history':
+            setMessages(data.messages || []);
+            break;
+          case 'chat_message':
+            setMessages(prev => [...prev, data.message]);
+            // Tăng số thông báo nếu đang đóng chat và tin nhắn không phải của mình
+            setIsChatOpen(currentIsOpen => {
+              if (!currentIsOpen && data.message.senderId !== user.id) {
+                setUnreadCount(p => p + 1);
+              }
+              return currentIsOpen;
+            });
+            break;
           default:
             break;
         }
@@ -159,11 +182,6 @@ export default function CallRoom() {
 
   const handleLeave = () => {
     navigate('/home');
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
   };
 
   const handleRename = () => {
@@ -200,7 +218,6 @@ export default function CallRoom() {
   const toggleScreenShare = async () => {
     try {
       if (isScreenSharing) {
-        // Tắt Screen Share -> Trở về Camera
         const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
         const videoTrack = videoStream.getVideoTracks()[0];
         const oldTrack = localStreamRef.current.getVideoTracks()[0];
@@ -212,14 +229,12 @@ export default function CallRoom() {
         videoTrack.enabled = videoOn;
         setIsScreenSharing(false);
         
-        // Thay thế track trên các kết nối PeerJS hiện tại
         Object.keys(peerRef.current.connections).forEach(peerId => {
           const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
           const sender = senders.find(s => s.track.kind === 'video');
           if (sender) sender.replaceTrack(videoTrack);
         });
       } else {
-        // Bật Screen Share
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
         const oldTrack = localStreamRef.current.getVideoTracks()[0];
@@ -230,7 +245,6 @@ export default function CallRoom() {
         oldTrack.stop();
         setIsScreenSharing(true);
 
-        // Lắng nghe sự kiện người dùng tự tắt Screen Share qua nút Stop của trình duyệt
         screenTrack.onended = () => { toggleScreenShare(); };
 
         Object.keys(peerRef.current.connections).forEach(peerId => {
@@ -244,23 +258,30 @@ export default function CallRoom() {
     }
   };
 
+  const sendMessage = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !wsRef.current) return;
+    wsRef.current.send(JSON.stringify({ type: 'chat_message', text: chatInput.trim() }));
+    setChatInput('');
+  };
+
   if (!user) return null;
 
   const isHost = user.id === hostId;
-  const totalUsers = participants.length + 1; // +1 for self
+  const totalUsers = participants.length + 1;
   let gridCols = 'grid-cols-1 md:grid-cols-2';
   if (totalUsers > 4) gridCols = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
   if (totalUsers > 12) gridCols = 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
 
   return (
-    <div className="h-screen w-full flex flex-col bg-gray-950 text-white">
+    <div className="h-screen w-full flex flex-col bg-gray-950 text-white overflow-hidden">
       {error && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500/90 text-white px-6 py-2 rounded-full shadow-lg backdrop-blur-md">
           {error}
         </div>
       )}
 
-      <header className="h-16 flex items-center justify-between px-6 glass-panel z-10 border-b border-gray-800">
+      <header className="h-16 flex items-center justify-between px-6 glass-panel z-10 border-b border-gray-800 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center">
             <VideoIcon className="w-4 h-4 text-white" />
@@ -295,60 +316,119 @@ export default function CallRoom() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center relative bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-gray-950/80">
-        <div className={`w-full max-w-7xl h-full grid ${gridCols} gap-4 auto-rows-fr relative z-10`}>
-          
-          {/* Self Video */}
-          <div className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md">
-            {localStreamRef.current && videoOn ? (
-              <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-              </div>
-            )}
-            <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-              Bạn {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
-              {!micOn && <MicOff className="w-3 h-3 text-red-400" />}
-            </div>
-          </div>
-
-          {/* Other Participants */}
-          {participants.map((p) => (
-            <div key={p.id} className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group">
-              {remoteStreams[p.id] ? (
-                <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} />
+      <div className="flex-1 flex overflow-hidden relative bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-gray-950/80">
+        
+        {/* Main Video Area */}
+        <main className={`flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center relative z-10 transition-all duration-300 ${isChatOpen ? 'pr-4 md:pr-0' : ''}`}>
+          <div className={`w-full max-w-7xl h-full grid ${gridCols} gap-4 auto-rows-fr`}>
+            
+            {/* Self Video */}
+            <div className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md">
+              {localStreamRef.current && videoOn ? (
+                <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
-                    {p.name.charAt(0).toUpperCase()}
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
+                    {user.name.charAt(0).toUpperCase()}
                   </div>
                 </div>
               )}
               <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-                {p.name} {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
+                Bạn {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
+                {!micOn && <MicOff className="w-3 h-3 text-red-400" />}
               </div>
-              
-              {isHost && (
-                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button 
-                    onClick={() => handleKick(p.id)}
-                    className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg backdrop-blur-md flex items-center justify-center shadow-lg transition-transform hover:scale-110"
-                    title="Đuổi người này khỏi phòng"
-                  >
-                    <UserMinus className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
             </div>
-          ))}
 
-        </div>
-      </main>
+            {/* Other Participants */}
+            {participants.map((p) => (
+              <div key={p.id} className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group">
+                {remoteStreams[p.id] ? (
+                  <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+                )}
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
+                  {p.name} {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
+                </div>
+                
+                {isHost && (
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button 
+                      onClick={() => handleKick(p.id)}
+                      className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg backdrop-blur-md flex items-center justify-center shadow-lg transition-transform hover:scale-110"
+                      title="Đuổi người này khỏi phòng"
+                    >
+                      <UserMinus className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
 
-      <footer className="h-24 flex items-center justify-center px-6 pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10">
+          </div>
+        </main>
+
+        {/* Chat Sidebar Panel */}
+        <aside className={`relative z-20 w-80 lg:w-96 glass-panel border-l border-gray-800 flex flex-col transition-all duration-300 transform ${isChatOpen ? 'translate-x-0' : 'translate-x-full absolute right-0 h-full invisible'}`}>
+          <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-blue-400" /> Trò chuyện
+            </h3>
+            <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-900/30">
+            {messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-gray-500 text-sm text-center">
+                Chưa có tin nhắn nào.<br/>Hãy nói lời chào!
+              </div>
+            ) : (
+              messages.map((m, i) => {
+                const isMe = m.senderId === user.id;
+                return (
+                  <div key={m.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    <span className="text-[11px] text-gray-500 mb-1 px-1">
+                      {isMe ? 'Bạn' : m.senderName} • {new Date(m.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <div className={`px-4 py-2 rounded-2xl max-w-[85%] break-words text-sm shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-bl-sm'}`}>
+                      {m.text}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <form onSubmit={sendMessage} className="p-4 border-t border-gray-800 bg-gray-950/50 shrink-0">
+            <div className="relative flex items-center">
+              <input 
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                placeholder="Nhập tin nhắn..."
+                className="w-full bg-gray-900 border border-gray-700 rounded-full pl-4 pr-12 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+              <button 
+                type="submit" 
+                disabled={!chatInput.trim()}
+                className="absolute right-2 p-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-full transition-colors flex items-center justify-center"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        </aside>
+
+      </div>
+
+      <footer className="h-24 flex items-center justify-center px-6 pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10 shrink-0">
         <button onClick={toggleMic} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${micOn ? 'glass-button hover:bg-gray-700' : 'bg-red-500 text-white hover:bg-red-600'}`}>
           {micOn ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
         </button>
@@ -363,6 +443,22 @@ export default function CallRoom() {
         
         <div className="w-px h-8 bg-gray-700 mx-1 sm:mx-2"></div>
         
+        {/* Toggle Chat Button */}
+        <button 
+          onClick={() => { setIsChatOpen(!isChatOpen); setUnreadCount(0); }} 
+          className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isChatOpen ? 'bg-blue-600 text-white' : 'glass-button hover:bg-gray-700'}`}
+          title="Trò chuyện"
+        >
+          <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+          {unreadCount > 0 && !isChatOpen && (
+            <span className="absolute top-0 right-0 transform translate-x-1 -translate-y-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-gray-900 animate-bounce">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
+
+        <div className="w-px h-8 bg-gray-700 mx-1 sm:mx-2"></div>
+
         <button onClick={handleLeave} className="px-4 sm:px-6 h-10 sm:h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.4)]">
           <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden sm:inline">Rời phòng</span>
         </button>

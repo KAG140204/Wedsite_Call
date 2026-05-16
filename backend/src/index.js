@@ -278,6 +278,7 @@ export class RoomSession {
     this.sessions = new Map();
     this.roomName = 'Phòng Mới';
     this.hostId = null;
+    this.messages = []; // Lưu trữ chat tạm thời trong RAM
   }
 
   async fetch(request) {
@@ -322,6 +323,9 @@ export class RoomSession {
     webSocket.accept();
     this.sessions.set(webSocket, userData);
 
+    // Gửi lịch sử chat cho người mới vào
+    webSocket.send(JSON.stringify({ type: 'chat_history', messages: this.messages }));
+
     this.broadcast({ type: 'user_joined', user: userData, participants: Array.from(this.sessions.values()) });
 
     webSocket.addEventListener('message', async (msg) => {
@@ -346,6 +350,19 @@ export class RoomSession {
               }
             }
           }
+        }
+        else if (data.type === 'chat_message') {
+          const msgObj = {
+            id: crypto.randomUUID(),
+            senderId: userData.id,
+            senderName: userData.name,
+            text: data.text,
+            time: new Date().toISOString()
+          };
+          this.messages.push(msgObj);
+          // Giới hạn 100 tin nhắn để tránh rò rỉ bộ nhớ
+          if (this.messages.length > 100) this.messages.shift();
+          this.broadcast({ type: 'chat_message', message: msgObj });
         }
       } catch (err) {
         console.error(err);
