@@ -7,7 +7,7 @@ const app = new Hono()
 // Apply CORS to all routes
 app.use('/*', cors({
   origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization']
 }))
 
@@ -134,6 +134,91 @@ app.get('/api/admin/logs', adminAuth, async (c) => {
   const db = c.env.DB;
   const { results } = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100').all();
   return c.json({ success: true, logs: results || [] });
+});
+
+// --- Admin Stats ---
+app.get('/api/admin/stats', adminAuth, async (c) => {
+  const db = c.env.DB;
+  const totalUsers = (await db.prepare('SELECT COUNT(*) as count FROM users').first()).count;
+  const totalRooms = (await db.prepare('SELECT COUNT(*) as count FROM rooms').first()).count;
+  
+  const today = new Date().toISOString().split('T')[0];
+  const todayActivity = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE timestamp LIKE ?").bind(`${today}%`).first()).count;
+  
+  // Phòng có thành viên > 0
+  const { results: roomRows } = await db.prepare('SELECT members FROM rooms').all();
+  const activeRooms = (roomRows || []).filter(r => {
+    const members = JSON.parse(r.members || '[]');
+    return members.length > 0;
+  }).length;
+  
+  return c.json({ success: true, stats: { totalUsers, totalRooms, todayActivity, activeRooms } });
+});
+
+// --- Admin Chart Data (7 ngày gần nhất) ---
+app.get('/api/admin/chart', adminAuth, async (c) => {
+  const db = c.env.DB;
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const label = `${d.getDate()}/${d.getMonth() + 1}`;
+    
+    const logins = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE action = 'LOGIN' AND timestamp LIKE ?").bind(`${dateStr}%`).first()).count;
+    const registers = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE action = 'REGISTER' AND timestamp LIKE ?").bind(`${dateStr}%`).first()).count;
+    const rooms = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE action = 'CREATE_ROOM' AND timestamp LIKE ?").bind(`${dateStr}%`).first()).count;
+    
+    days.push({ label, logins, registers, rooms });
+  }
+  return c.json({ success: true, chart: days });
+});
+
+// --- Delete User ---
+app.delete('/api/admin/users/:userId', adminAuth, async (c) => {
+  const userId = c.req.param('userId');
+  const admin = c.get('user');
+  const db = c.env.DB;
+  
+  if (userId === admin.id) return c.json({ error: 'Không thể xóa chính mình' }, 400);
+  
+  const target = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first();
+  if (!target) return c.json({ error: 'Không tìm thấy người dùng' }, 404);
+  
+  await db.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+  await logEvent(db, 'ADMIN_DELETE_USER', admin.email, `Xóa user: ${target.email}`);
+  
+  return c.json({ success: true });
+});
+
+// --- Delete Room ---
+app.delete('/api/admin/rooms/:roomId', adminAuth, async (c) => {
+  const roomId = c.req.param('roomId');
+  const admin = c.get('user');
+  const db = c.env.DB;
+  
+  await db.prepare('DELETE FROM rooms WHERE id = ?').bind(roomId).run();
+  await logEvent(db, 'ADMIN_DELETE_ROOM', admin.email, `Xóa phòng: ${roomId}`);
+  
+  return c.json({ success: true });
+});
+
+// --- Update User Role ---
+app.put('/api/admin/users/:userId/role', adminAuth, async (c) => {
+  const userId = c.req.param('userId');
+  const admin = c.get('user');
+  const { role } = await c.req.json();
+  const db = c.env.DB;
+  
+  if (userId === admin.id) return c.json({ error: 'Không thể đổi role chính mình' }, 400);
+  if (!['admin', 'user'].includes(role)) return c.json({ error: 'Role không hợp lệ' }, 400);
+  
+  await db.prepare('UPDATE users SET role = ? WHERE id = ?').bind(role, userId).run();
+  
+  const target = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first();
+  await logEvent(db, 'ADMIN_CHANGE_ROLE', admin.email, `Đổi role ${target?.email} → ${role}`);
+  
+  return c.json({ success: true });
 });
 
 // ---------------- USER API (Nhóm/Phòng & Cập nhật Profile) ----------------
