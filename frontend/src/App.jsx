@@ -28,8 +28,8 @@ function AppRoutes() {
     <>
       <GooeyProfileMenu />
       <Routes>
-        {/* Trang công khai: Nếu đã đăng nhập → tự chuyển về /home */}
-        <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+        {/* Trang công khai */}
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
 

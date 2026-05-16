@@ -129,27 +129,45 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {myRooms.map(room => (
-                <div key={room.roomId} className="glass-panel p-6 rounded-2xl border border-gray-800 hover:border-purple-500/50 transition-all group flex flex-col justify-between h-48">
+                <div key={room.roomId || room.id} className="glass-panel p-6 rounded-2xl border border-gray-800 hover:border-purple-500/50 transition-all group flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start">
                       <h3 className="text-xl font-bold text-white mb-1 truncate">{room.roomName}</h3>
                       {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30">Host</span>}
                     </div>
-                    <p className="text-xs text-gray-500 font-mono mb-4">ID: {room.roomId}</p>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <Users className="w-4 h-4" /> {room.members?.length || 1} thành viên
+                    <p className="text-xs text-gray-500 font-mono mb-3">ID: {room.roomId || room.id}</p>
+                    
+                    {/* Hiển thị danh sách thành viên */}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Users className="w-4 h-4 text-purple-400" />
+                        <span className="text-sm text-gray-400">{room.members?.length || 1} thành viên</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(room.members || []).slice(0, 5).map((m, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 bg-gray-800/80 text-xs text-gray-300 px-2 py-1 rounded-full border border-gray-700">
+                            <span className="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
+                              {m.name?.charAt(0)?.toUpperCase() || '?'}
+                            </span>
+                            {m.name}
+                          </span>
+                        ))}
+                        {(room.members?.length || 0) > 5 && (
+                          <span className="text-xs text-gray-500 px-2 py-1">+{room.members.length - 5} người khác</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   
-                  <div className="flex gap-2 mt-4">
+                  <div className="flex gap-2 mt-2">
                     <button 
-                      onClick={() => navigate(`/room/${room.roomId}`)}
+                      onClick={() => navigate(`/room/${room.roomId || room.id}`)}
                       className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg"
                     >
                       <PhoneCall className="w-4 h-4" /> Tham gia Call
                     </button>
                     <button 
-                      onClick={() => handleLeaveGroup(room.roomId)}
+                      onClick={() => handleLeaveGroup(room.roomId || room.id)}
                       className="px-3 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500/50 rounded-lg transition-colors flex items-center justify-center"
                       title="Rời nhóm"
                     >
