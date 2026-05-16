@@ -40,7 +40,7 @@ const requireAuth = async (c, next) => {
   
   const token = authHeader.split(' ')[1];
   try {
-    const payload = await verify(token, c.env.JWT_SECRET || 'secret');
+    const payload = await verify(token, c.env.JWT_SECRET || 'secret', 'HS256');
     c.set('user', payload);
     await next();
   } catch (err) {
