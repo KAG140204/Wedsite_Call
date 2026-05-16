@@ -420,15 +420,30 @@ app.post('/api/rooms/:roomId/leave', requireAuth, async (c) => {
 
 app.get('/api/rooms/:roomId', async (c) => {
   const roomId = c.req.param('roomId')
+  const db = c.env.DB;
   try {
+    const roomFromDB = await db.prepare('SELECT roomName, hostId FROM rooms WHERE id = ?').bind(roomId).first();
+    if (!roomFromDB) {
+      return c.json({ error: 'Mã phòng không tồn tại' }, 404)
+    }
+
     const isHex64 = /^[0-9a-f]{64}$/i.test(roomId);
     const id = isHex64 ? c.env.ROOM_SESSION.idFromString(roomId) : c.env.ROOM_SESSION.idFromName(roomId);
     const stub = c.env.ROOM_SESSION.get(id)
     const res = await stub.fetch(new Request('http://internal/info'))
     const data = await res.json()
-    return c.json({ success: true, room: { roomId, ...data } })
+    
+    return c.json({ 
+      success: true, 
+      room: { 
+        roomId, 
+        ...data, 
+        roomName: roomFromDB.roomName, 
+        hostId: roomFromDB.hostId || data.hostId 
+      } 
+    })
   } catch (err) {
-    return c.json({ error: 'Mã phòng không hợp lệ hoặc phòng đã đóng' }, 404)
+    return c.json({ error: 'Mã phòng không hợp lệ hoặc phòng đã đóng' }, 500)
   }
 })
 
@@ -476,6 +491,8 @@ export class RoomSession {
     if (request.headers.get("Upgrade") === "websocket") {
       const userId = url.searchParams.get('userId');
       const userName = url.searchParams.get('userName');
+      const parts = url.pathname.split('/');
+      this.roomId = parts[parts.length - 1];
 
       if (!userId || !userName) {
         return new Response("Missing user info", { status: 400 });
@@ -507,11 +524,15 @@ export class RoomSession {
         const data = JSON.parse(msg.data);
         
         if (data.type === 'rename') {
-          if (userData.id === this.hostId) {
+          if (userData.id === this.hostId || !this.hostId) {
             this.roomName = data.roomName;
             this.broadcast({ type: 'room_renamed', roomName: data.roomName });
+            if (this.env.DB && this.roomId) {
+              this.env.DB.prepare('UPDATE rooms SET roomName = ? WHERE id = ?')
+                .bind(data.roomName, this.roomId).run().catch(console.error);
+            }
           }
-        } 
+        }
         else if (data.type === 'kick') {
           if (userData.id === this.hostId) {
             for (let [ws, u] of this.sessions.entries()) {
