@@ -100,7 +100,9 @@ export default function AdminDashboard() {
     }
     fetchStats();
     fetchChart();
-    fetchData(activeTab);
+    if (activeTab !== 'reports') {
+      fetchData(activeTab);
+    }
   }, [user, navigate, activeTab]);
 
   const fetchStats = async () => {
@@ -237,61 +239,50 @@ export default function AdminDashboard() {
   if (!user || user.role !== 'admin') return null;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col md:flex-row">
-      {/* ====== SIDEBAR ====== */}
-      <aside className="w-full md:w-64 glass-panel border-r border-gray-800 flex flex-col p-4 md:h-screen sticky top-0 z-20 shrink-0">
-        <div className="flex items-center gap-3 mb-8 px-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
-            <Shield className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-gray-950 text-white pb-24 overflow-y-auto flex flex-col items-center">
+      <main className="w-full max-w-7xl p-4 md:p-8">
+        
+        {/* --- HEADER --- */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
+            <Shield className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-lg leading-tight">Admin Panel</h2>
-            <p className="text-xs text-blue-400">Kaysor System</p>
+            <h2 className="font-bold text-2xl leading-tight">Admin Panel</h2>
+            <p className="text-sm text-blue-400">Kaysor System</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        {/* --- HORIZONTAL TABS --- */}
+        <div className="flex flex-wrap items-center gap-2 mb-8 glass-panel p-2 rounded-2xl border border-gray-800">
           <button 
             onClick={() => { setActiveTab('users'); setSearchQuery(''); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
           >
             <Users className="w-5 h-5" /> Tài Khoản
           </button>
           
           <button 
             onClick={() => { setActiveTab('rooms'); setSearchQuery(''); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'rooms' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'rooms' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
           >
-            <Database className="w-5 h-5" /> Danh sách Phòng
+            <Database className="w-5 h-5" /> Phòng
           </button>
 
           <button 
             onClick={() => { setActiveTab('logs'); setSearchQuery(''); setLogFilter('ALL'); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'logs' ? 'bg-pink-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'logs' ? 'bg-pink-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
           >
-            <Activity className="w-5 h-5" /> Nhật ký (Logs)
+            <Activity className="w-5 h-5" /> Nhật ký
           </button>
 
           <button 
             onClick={() => { setActiveTab('reports'); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'reports' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'reports' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
           >
             <FileText className="w-5 h-5" /> Báo Cáo
           </button>
-        </nav>
-
-        <div className="mt-auto space-y-2 pt-4 border-t border-gray-800">
-          <button onClick={() => navigate('/home')} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors">
-            <ArrowLeft className="w-5 h-5" /> Về trang chủ
-          </button>
-          <button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors">
-            <LogOut className="w-5 h-5" /> Đăng xuất
-          </button>
         </div>
-      </aside>
-
-      {/* ====== MAIN CONTENT ====== */}
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto">
         
         {/* --- STATS CARDS --- */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
