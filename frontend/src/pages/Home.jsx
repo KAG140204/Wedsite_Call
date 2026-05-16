@@ -135,10 +135,10 @@ export default function Home() {
                 <div key={room.roomId || room.id} className="glass-panel p-6 rounded-2xl border border-gray-800 hover:border-purple-500/50 transition-all group flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start">
-                      <h3 className="text-xl font-bold text-white mb-1 truncate">{room.roomName}</h3>
-                      {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30">Host</span>}
+                      <h3 className="text-xl font-bold text-white mb-1 truncate pr-2">{room.roomName}</h3>
+                      {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30 shrink-0">Host</span>}
                     </div>
-                    <p className="text-xs text-gray-500 font-mono mb-3">ID: {room.roomId || room.id}</p>
+                    <p className="text-xs text-gray-500 font-mono mb-3 truncate" title={room.roomId || room.id}>ID: {room.roomId || room.id}</p>
                     
                     {/* Hiển thị danh sách thành viên */}
                     <div className="mb-3">

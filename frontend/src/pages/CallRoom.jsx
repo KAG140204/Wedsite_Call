@@ -196,22 +196,66 @@ export default function CallRoom() {
     if (wsRef.current) wsRef.current.send(JSON.stringify({ type: 'kick', targetId }));
   };
 
-  const toggleMic = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !micOn;
-        setMicOn(!micOn);
+  const toggleMic = async () => {
+    if (micOn) {
+      if (localStreamRef.current) {
+        const track = localStreamRef.current.getAudioTracks()[0];
+        if (track) track.stop(); // Turn off completely
+      }
+      setMicOn(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const newTrack = stream.getAudioTracks()[0];
+        
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getAudioTracks()[0];
+          if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+          localStreamRef.current.addTrack(newTrack);
+        }
+
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
+            const sender = senders.find(s => s.track && s.track.kind === 'audio' || (!s.track && s.track?.kind === 'audio') || (s.track?.kind === 'audio'));
+            if (sender) sender.replaceTrack(newTrack);
+          });
+        }
+        setMicOn(true);
+      } catch (err) {
+        console.error("Error turning on mic", err);
       }
     }
   };
 
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoOn;
-        setVideoOn(!videoOn);
+  const toggleVideo = async () => {
+    if (videoOn) {
+      if (localStreamRef.current) {
+        const track = localStreamRef.current.getVideoTracks()[0];
+        if (track) track.stop(); // Turn off completely (light goes off)
+      }
+      setVideoOn(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newTrack = stream.getVideoTracks()[0];
+        
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+          localStreamRef.current.addTrack(newTrack);
+        }
+
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
+            const sender = senders.find(s => s.track && s.track.kind === 'video' || (!s.track && s.track?.kind === 'video') || (s.track?.kind === 'video'));
+            if (sender) sender.replaceTrack(newTrack);
+          });
+        }
+        setVideoOn(true);
+      } catch (err) {
+        console.error("Error turning on video", err);
       }
     }
   };

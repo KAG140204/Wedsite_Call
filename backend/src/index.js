@@ -359,8 +359,11 @@ app.post('/api/user/avatar', requireAuth, async (c) => {
 
 app.post('/api/rooms', requireAuth, async (c) => {
   const { roomName, hostId, hostName } = await c.req.json()
-  const id = c.env.ROOM_SESSION.newUniqueId()
-  const roomId = id.toString()
+  
+  // Tạo ID 20 kí tự
+  const shortId = crypto.randomUUID().substring(0, 20);
+  const id = c.env.ROOM_SESSION.idFromName(shortId);
+  const roomId = shortId;
   const db = c.env.DB;
 
   const members = JSON.stringify([{ id: hostId, name: hostName }]);
@@ -418,7 +421,8 @@ app.post('/api/rooms/:roomId/leave', requireAuth, async (c) => {
 app.get('/api/rooms/:roomId', async (c) => {
   const roomId = c.req.param('roomId')
   try {
-    const id = c.env.ROOM_SESSION.idFromString(roomId)
+    const isHex64 = /^[0-9a-f]{64}$/i.test(roomId);
+    const id = isHex64 ? c.env.ROOM_SESSION.idFromString(roomId) : c.env.ROOM_SESSION.idFromName(roomId);
     const stub = c.env.ROOM_SESSION.get(id)
     const res = await stub.fetch(new Request('http://internal/info'))
     const data = await res.json()
@@ -431,7 +435,8 @@ app.get('/api/rooms/:roomId', async (c) => {
 app.get('/api/ws/:roomId', async (c) => {
   const roomId = c.req.param('roomId')
   try {
-    const id = c.env.ROOM_SESSION.idFromString(roomId)
+    const isHex64 = /^[0-9a-f]{64}$/i.test(roomId);
+    const id = isHex64 ? c.env.ROOM_SESSION.idFromString(roomId) : c.env.ROOM_SESSION.idFromName(roomId);
     const stub = c.env.ROOM_SESSION.get(id)
     return stub.fetch(c.req.raw)
   } catch (err) {
