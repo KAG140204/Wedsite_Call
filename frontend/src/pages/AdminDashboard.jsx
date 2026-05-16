@@ -240,7 +240,7 @@ export default function AdminDashboard() {
   if (!user || user.role !== 'admin') return null;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white pb-24 overflow-y-auto flex flex-col items-center">
+    <div className="min-h-screen bg-gray-950 text-white pb-32 overflow-y-auto flex flex-col items-center">
       <main className="w-full max-w-7xl p-4 md:p-8">
         
         {/* --- HEADER --- */}
@@ -318,14 +318,14 @@ export default function AdminDashboard() {
             
             {/* Date Picker for Reports */}
             {activeTab === 'reports' && (
-              <div className="flex items-center gap-3 bg-gray-900 border border-gray-700 p-2 rounded-xl">
-                <div className="flex items-center gap-2 px-2">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none" />
+              <div className="flex flex-wrap items-center gap-2 bg-gray-900 border border-gray-700 p-2 rounded-xl w-full md:w-auto">
+                <div className="flex items-center gap-2 px-2 flex-1 min-w-[130px]">
+                  <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none w-full" />
                 </div>
-                <span className="text-gray-500">-</span>
-                <div className="px-2">
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none" />
+                <span className="text-gray-500 hidden sm:block">-</span>
+                <div className="px-2 flex-1 min-w-[130px]">
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none w-full" />
                 </div>
               </div>
             )}
@@ -520,28 +520,29 @@ export default function AdminDashboard() {
 
               {/* ====== REPORTS UI ====== */}
               {activeTab === 'reports' && report && (
-                <div className="p-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
-                      <p className="text-gray-400 mb-1">Tài khoản mới</p>
-                      <p className="text-3xl font-bold text-blue-400">+{report.newUsers}</p>
+                <div className="p-4 sm:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="bg-gray-900/50 p-4 sm:p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1 text-sm sm:text-base">Tài khoản mới</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-blue-400">+{report.newUsers}</p>
                     </div>
-                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
-                      <p className="text-gray-400 mb-1">Phòng đã tạo</p>
-                      <p className="text-3xl font-bold text-purple-400">+{report.newRooms}</p>
+                    <div className="bg-gray-900/50 p-4 sm:p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1 text-sm sm:text-base">Phòng đã tạo</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-purple-400">+{report.newRooms}</p>
                     </div>
-                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
-                      <p className="text-gray-400 mb-1">Lượt đăng nhập</p>
-                      <p className="text-3xl font-bold text-green-400">{report.totalLogins}</p>
+                    <div className="bg-gray-900/50 p-4 sm:p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1 text-sm sm:text-base">Lượt đăng nhập</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-green-400">{report.totalLogins}</p>
                     </div>
-                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
-                      <p className="text-gray-400 mb-1">Tổng Action logs</p>
-                      <p className="text-3xl font-bold text-orange-400">{report.totalActions}</p>
+                    <div className="bg-gray-900/50 p-4 sm:p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1 text-sm sm:text-base">Tổng Action logs</p>
+                      <p className="text-2xl sm:text-3xl font-bold text-orange-400">{report.totalActions}</p>
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-bold text-white mb-4">Chi tiết theo ngày</h3>
-                  <table className="w-full text-left border-collapse">
+                  <h3 className="text-lg sm:text-xl font-bold text-white mb-4">Chi tiết theo ngày</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse min-w-[500px]">
                     <thead>
                       <tr className="bg-gray-900 border-b border-gray-800 text-gray-400 text-sm">
                         <th className="p-4 font-medium">Ngày</th>
@@ -565,6 +566,7 @@ export default function AdminDashboard() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               )}
             </div>
