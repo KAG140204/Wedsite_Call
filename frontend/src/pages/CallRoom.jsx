@@ -316,16 +316,16 @@ export default function CallRoom() {
   const isHost = user.id === hostId;
   const totalUsers = participants.length + 1;
   
-  // Logic chia cột grid linh hoạt dựa trên số người
-  let gridCols = 'grid-cols-1';
+  // Logic tính toán kích thước khung video bằng Flexbox + Aspect Ratio (16:9)
+  let itemClass = 'w-full max-w-5xl'; // 1 người: chiếm giữa màn hình, giới hạn max-width
   if (totalUsers === 2) {
-    gridCols = 'grid-cols-1 sm:grid-cols-2';
+    itemClass = 'w-full md:w-[calc(50%-0.5rem)] max-w-4xl'; // 2 người: mobile xếp dọc, desktop xếp ngang
   } else if (totalUsers >= 3 && totalUsers <= 4) {
-    gridCols = 'grid-cols-2';
-  } else if (totalUsers >= 5 && totalUsers <= 8) {
-    gridCols = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
-  } else if (totalUsers > 8) {
-    gridCols = 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+    itemClass = 'w-[calc(50%-0.5rem)]'; // 3-4 người: chia 2 cột đều nhau
+  } else if (totalUsers >= 5 && totalUsers <= 9) {
+    itemClass = 'w-[calc(50%-0.5rem)] md:w-[calc(33.33%-0.66rem)]'; // 5-9 người: mobile 2 cột, desktop 3 cột
+  } else if (totalUsers > 9) {
+    itemClass = 'w-[calc(33.33%-0.66rem)] md:w-[calc(25%-0.75rem)]'; // Nhiều hơn: 3-4 cột
   }
 
   return (
@@ -375,10 +375,10 @@ export default function CallRoom() {
         
         {/* Main Video Area */}
         <main className={`flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center relative z-10 transition-all duration-300 ${isChatOpen ? 'pr-4 md:pr-0' : ''}`}>
-          <div className={`w-full max-w-7xl h-full grid ${gridCols} gap-4 auto-rows-fr`}>
+          <div className="w-full max-w-7xl flex flex-wrap items-center justify-center gap-4">
             
             {/* Self Video */}
-            <div className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md">
+            <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
               {localStreamRef.current && videoOn ? (
                 <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} />
               ) : (
@@ -396,7 +396,7 @@ export default function CallRoom() {
 
             {/* Other Participants */}
             {participants.map((p) => (
-              <div key={p.id} className="relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group">
+              <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
                 {remoteStreams[p.id] ? (
                   <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} />
                 ) : (
