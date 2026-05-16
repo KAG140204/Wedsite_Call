@@ -117,14 +117,17 @@ export default function Home() {
         {/* Left Side: My Groups */}
         <div className="flex-1">
           <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-            <Users className="w-8 h-8 text-purple-400" /> Xin chào, {user.name}
+            <Users className="w-8 h-8 text-purple-400" /> 👋 Chào mừng trở lại, {user.name}
           </h2>
+          <p className="text-gray-300 mb-4 max-w-2xl">
+            Squad đang chờ. Tạo phòng mới hoặc nhập mã để vào call và lên chiến thuật trước giờ combat.
+          </p>
           
           {loadingRooms ? (
             <div className="text-gray-400">Đang tải danh sách nhóm...</div>
           ) : myRooms.length === 0 ? (
             <div className="glass-panel p-8 rounded-2xl text-center text-gray-400">
-              Bạn chưa tham gia nhóm nào. Hãy tạo hoặc nhập mã ID để tham gia.
+              Bạn chưa tham gia phòng nào. Tạo một phòng mới hoặc nhập mã phòng để kết nối cùng đồng đội.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -183,33 +186,29 @@ export default function Home() {
         {/* Right Side: Create / Join Actions */}
         <div className="w-full lg:w-96 flex flex-col gap-6">
           <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-purple-400" /> Tạo Nhóm Mới
-            </h3>
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-purple-400" /> 🎮 Tạo Squad Mới</h3>
             <form onSubmit={handleCreateRoom} className="space-y-4">
               <input 
                 type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)}
                 className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
-                placeholder="Tên nhóm (VD: Dự án cuối năm)"
+                placeholder="Đặt tên phòng (VD: Rank Kim Cương tối nay)"
               />
               <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-                {isLoading ? 'Đang tạo...' : 'Tạo Nhóm'}
+                {isLoading ? 'Đang tạo...' : 'Tạo Phòng Ngay'}
               </button>
             </form>
           </div>
 
           <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <LogIn className="w-5 h-5 text-blue-400" /> Tham Gia Mã ID
-            </h3>
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><LogIn className="w-5 h-5 text-blue-400" /> 🚀 Tham Gia Bằng Mã</h3>
             <form onSubmit={handleJoinRoomAPI} className="space-y-4">
               <input 
                 type="text" required value={roomId} onChange={(e) => setRoomId(e.target.value)}
                 className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                placeholder="Nhập mã ID..."
+                placeholder="Nhập mã phòng tại đây..."
               />
               <button type="submit" className="w-full glass-button text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-                Gia Nhập
+                Vào Call
               </button>
             </form>
             {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-2 rounded-lg border border-red-500/20">{error}</div>}

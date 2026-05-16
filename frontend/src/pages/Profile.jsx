@@ -115,8 +115,8 @@ export default function Profile() {
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
 
       <div className="w-full max-w-4xl z-10 mt-10">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors font-medium">
-          <ArrowLeft className="w-5 h-5" /> Quay lại
+        <button onClick={() => navigate('/home')} className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors font-medium">
+          <ArrowLeft className="w-5 h-5" /> ← Quay về Kaysor
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -153,7 +153,8 @@ export default function Profile() {
                 <Shield className="w-5 h-5 text-blue-400" />
                 <div>
                   <p className="text-xs text-gray-500">Vai trò</p>
-                  <p className="font-medium text-blue-200 capitalize">{user.role}</p>
+                  <p className="font-medium text-blue-200 capitalize">Game Member</p>
+                  <p className="text-gray-500 text-xs mt-1">Luôn sẵn sàng vào trận.</p>
                 </div>
               </div>
             </div>
@@ -161,10 +162,10 @@ export default function Profile() {
 
           {/* Cột phải: Form cập nhật */}
           <div className="md:col-span-2 glass-panel p-8 rounded-3xl">
-            <h3 className="text-2xl font-bold mb-6 flex items-center gap-3">
-              <User className="w-6 h-6 text-purple-400" />
-              Cập nhật thông tin
+            <h3 className="text-2xl font-bold mb-2 flex items-center gap-3">
+              <User className="w-6 h-6 text-purple-400" /> 🎧 Hồ sơ Kaysor
             </h3>
+            <p className="text-gray-400 mb-6 text-sm">Quản lý thông tin tài khoản và tùy chỉnh hồ sơ của bạn.</p>
 
             {error && <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">{error}</div>}
             {success && <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400">{success}</div>}
@@ -172,7 +173,7 @@ export default function Profile() {
             <form onSubmit={handleUpdate} className="space-y-6">
               {/* Đổi tên */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-400 ml-1">Tên hiển thị</label>
+                <label className="text-sm font-medium text-gray-400 ml-1">Tên đồng đội sẽ nhìn thấy</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <User className="w-5 h-5 text-gray-500" />
@@ -223,6 +224,7 @@ export default function Profile() {
                 {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <Save className="w-5 h-5" />}
                 {loading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
               </button>
+              <p className="text-gray-500 text-xs text-center mt-4">Thông tin luôn được bảo vệ để bạn tập trung call team và chiến game. Vì thứ duy nhất nên bị lộ là vị trí địch, không phải tài khoản.</p>
             </form>
           </div>
         </div>
