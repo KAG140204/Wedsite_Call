@@ -123,8 +123,11 @@ export default function CallRoom() {
 
         switch (data.type) {
           case 'user_joined':
+            // Luôn cập nhật danh sách người tham gia (để người mới vào lấy được danh sách những người đang có mặt)
+            setParticipants(data.participants.filter(p => p.id !== user.id));
+            
+            // Nếu người mới vào KHÔNG PHẢI LÀ MÌNH, mình sẽ chủ động gọi cho họ
             if (data.user.id !== user.id) {
-              setParticipants(data.participants.filter(p => p.id !== user.id));
               if (localStreamRef.current && peerRef.current) {
                 const call = peerRef.current.call(data.user.id, localStreamRef.current);
                 call.on('stream', (userVideoStream) => {
