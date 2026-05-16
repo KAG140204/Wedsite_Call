@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Globe, Home, User, LogOut } from 'lucide-react';
+import { Gamepad2, Home, User, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './GooeyProfileMenu.css';
@@ -48,7 +48,7 @@ export default function GooeyProfileMenu() {
 
         {/* Nút 1: Trang Giới Thiệu */}
         <button onClick={() => handleNavigate('/')} className="menu-item bg-teal-500 hover:bg-teal-400" title="Trang Giới Thiệu">
-          <Globe className="w-5 h-5 text-white" />
+          <Gamepad2 className="w-5 h-5 text-white" />
         </button>
         
         {/* Nút 2: Sảnh Quản Lý Nhóm */}
