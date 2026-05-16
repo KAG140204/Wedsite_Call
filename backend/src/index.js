@@ -101,6 +101,7 @@ app.post('/api/auth/login', async (c) => {
 
   const token = await sign({
     id: user.id,
+    email: user.email,
     role: user.role,
     exp: Math.floor(Date.now() / 1000) + 86400 // 24 hours
   }, c.env.JWT_SECRET || 'secret');
