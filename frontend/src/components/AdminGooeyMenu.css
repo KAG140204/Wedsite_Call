@@ -1,0 +1,117 @@
+/* Nền tảng CSS để tích hợp hiệu ứng SVG filter vào HTML Element */
+.admin-gooey-menu {
+  filter: url('#shadowed-goo');
+  position: relative;
+  width: 80px;
+  height: 80px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.admin-menu-item,
+.admin-menu-open-button {
+  background: #2563eb; /* Blue 600 default */
+  border-radius: 100%;
+  width: 60px;
+  height: 60px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  text-align: center;
+  line-height: 60px;
+  transform: translate3d(0, 0, 0);
+  transition: transform ease-out 200ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.admin-menu-open-button {
+  z-index: 2;
+  transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.44);
+  transition-duration: 400ms;
+  transform: scale(1.1) translate3d(0, 0, 0);
+  cursor: pointer;
+}
+
+.admin-menu-open-button:hover {
+  transform: scale(1.2) translate3d(0, 0, 0);
+}
+
+.admin-menu-open {
+  display: none;
+}
+
+/* Các gạch ngang tạo biểu tượng Hamburger */
+.admin-lines {
+  width: 25px;
+  height: 3px;
+  background: white;
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -12.5px;
+  margin-top: -1.5px;
+  transition: transform 200ms;
+}
+
+.admin-line-1 { transform: translate3d(0, -8px, 0); }
+.admin-line-2 { transform: translate3d(0, 0, 0); }
+.admin-line-3 { transform: translate3d(0, 8px, 0); }
+
+/* Animation khi menu mở -> Biến thành dấu X */
+.admin-menu-open:checked + .admin-menu-open-button .admin-line-1 {
+  transform: translate3d(0, 0, 0) rotate(45deg);
+}
+
+.admin-menu-open:checked + .admin-menu-open-button .admin-line-2 {
+  transform: translate3d(0, 0, 0) scale(0.1, 1);
+}
+
+.admin-menu-open:checked + .admin-menu-open-button .admin-line-3 {
+  transform: translate3d(0, 0, 0) rotate(-45deg);
+}
+
+/* Các nút con - khi đang đóng */
+.admin-menu-item {
+  background: #4b5563;
+}
+.admin-menu-item:hover {
+  background: #374151;
+  color: white;
+}
+.admin-menu-item:nth-child(3) { transition-duration: 180ms; }
+.admin-menu-item:nth-child(4) { transition-duration: 180ms; }
+.admin-menu-item:nth-child(5) { transition-duration: 180ms; }
+.admin-menu-item:nth-child(6) { transition-duration: 180ms; }
+
+/* Nảy các nút con lên trên khi mở menu (Lan tỏa hình cánh quạt) */
+/* BOTTOM-LEFT pop to TOP-RIGHT */
+.admin-menu-open:checked ~ .admin-menu-item {
+  transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.admin-menu-open:checked ~ .admin-menu-item:nth-child(3) {
+  transition-duration: 190ms;
+  transform: translate3d(0, -130px, 0); /* Lên thẳng */
+}
+
+.admin-menu-open:checked ~ .admin-menu-item:nth-child(4) {
+  transition-duration: 240ms;
+  transform: translate3d(65px, -110px, 0); /* Chéo lên phải */
+}
+
+.admin-menu-open:checked ~ .admin-menu-item:nth-child(5) {
+  transition-duration: 290ms;
+  transform: translate3d(110px, -65px, 0); /* Chéo phải */
+}
+
+.admin-menu-open:checked ~ .admin-menu-item:nth-child(6) {
+  transition-duration: 340ms;
+  transform: translate3d(130px, 0, 0); /* Ngang phải */
+}

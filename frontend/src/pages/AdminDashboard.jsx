@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List, Search, Trash2, ShieldCheck, ShieldOff, BarChart3, TrendingUp, UserCheck, Gamepad2, FileText, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import '../components/AdminGooeyMenu.css';
 
 // ========== MINI CHART COMPONENT ==========
 function MiniChart({ data }) {
@@ -253,35 +254,37 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* --- HORIZONTAL TABS --- */}
-        <div className="flex flex-wrap items-center gap-2 mb-8 glass-panel p-2 rounded-2xl border border-gray-800">
-          <button 
-            onClick={() => { setActiveTab('users'); setSearchQuery(''); }}
-            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'users' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-          >
-            <Users className="w-5 h-5" /> Tài Khoản
-          </button>
-          
-          <button 
-            onClick={() => { setActiveTab('rooms'); setSearchQuery(''); }}
-            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'rooms' ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-          >
-            <Database className="w-5 h-5" /> Phòng
-          </button>
+        {/* ====== ADMIN GOOEY MENU ====== */}
+        <div className="fixed bottom-8 left-8 z-50">
+          <nav className="admin-gooey-menu text-white">
+            <input 
+              type="checkbox" 
+              className="admin-menu-open" 
+              name="admin-menu-open" 
+              id="admin-menu-open" 
+            />
+            <label className="admin-menu-open-button bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/40" htmlFor="admin-menu-open">
+              <span className="admin-lines admin-line-1"></span>
+              <span className="admin-lines admin-line-2"></span>
+              <span className="admin-lines admin-line-3"></span>
+            </label>
 
-          <button 
-            onClick={() => { setActiveTab('logs'); setSearchQuery(''); setLogFilter('ALL'); }}
-            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'logs' ? 'bg-pink-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-          >
-            <Activity className="w-5 h-5" /> Nhật ký
-          </button>
+            <button onClick={() => { setActiveTab('users'); setSearchQuery(''); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-blue-500 hover:bg-blue-400 ${activeTab === 'users' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Tài Khoản">
+              <Users className="w-5 h-5 text-white" />
+            </button>
+            
+            <button onClick={() => { setActiveTab('rooms'); setSearchQuery(''); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-purple-500 hover:bg-purple-400 ${activeTab === 'rooms' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Danh sách Phòng">
+              <Database className="w-5 h-5 text-white" />
+            </button>
 
-          <button 
-            onClick={() => { setActiveTab('reports'); }}
-            className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'reports' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-          >
-            <FileText className="w-5 h-5" /> Báo Cáo
-          </button>
+            <button onClick={() => { setActiveTab('logs'); setSearchQuery(''); setLogFilter('ALL'); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-pink-500 hover:bg-pink-400 ${activeTab === 'logs' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Nhật ký">
+              <Activity className="w-5 h-5 text-white" />
+            </button>
+
+            <button onClick={() => { setActiveTab('reports'); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-orange-500 hover:bg-orange-400 ${activeTab === 'reports' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Báo Cáo">
+              <FileText className="w-5 h-5 text-white" />
+            </button>
+          </nav>
         </div>
         
         {/* --- STATS CARDS --- */}
