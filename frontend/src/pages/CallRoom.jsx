@@ -36,8 +36,8 @@ export default function CallRoom() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   
-  const [micOn, setMicOn] = useState(true);
-  const [videoOn, setVideoOn] = useState(true);
+  const [micOn, setMicOn] = useState(false);
+  const [videoOn, setVideoOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,8 +91,9 @@ export default function CallRoom() {
           });
         });
 
-        stream.getAudioTracks()[0].enabled = micOn;
-        stream.getVideoTracks()[0].enabled = videoOn;
+        // Mặc định tắt hoàn toàn phần cứng (mic/cam) khi mới vào phòng
+        stream.getAudioTracks().forEach(track => track.stop());
+        stream.getVideoTracks().forEach(track => track.stop());
       } catch (err) {
         setError('Không thể truy cập Camera/Microphone. Vui lòng cấp quyền.');
       }
