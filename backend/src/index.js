@@ -6,8 +6,8 @@ const app = new Hono()
 
 // Apply CORS to all routes
 app.use('/*', cors({
-  origin: '*', // Allow all origins for dev, restrict in production
-  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  origin: '*',
+  allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization']
 }))
 
@@ -23,45 +23,11 @@ async function hashPassword(password) {
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// MongoDB Atlas Data API Helper
-const callMongoAPI = async (env, action, collection, payload = {}) => {
-  const API_URL = env.MONGODB_DATA_API_URL;
-  const API_KEY = env.MONGODB_API_KEY;
-  const CLUSTER_NAME = env.MONGODB_CLUSTER_NAME;
-
-  if (!API_URL || !API_KEY) {
-    return { success: true, action, collection, data: payload, isMock: true };
-  }
-
-  const data = JSON.stringify({
-    collection: collection,
-    database: "call_team_db",
-    dataSource: CLUSTER_NAME || "Cluster0",
-    ...payload
-  });
-
-  const response = await fetch(`${API_URL}/action/${action}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Request-Headers': '*',
-      'api-key': API_KEY,
-    },
-    body: data
-  });
-
-  return await response.json();
-}
-
-// Logger Helper
-const logEvent = async (env, action, email, details = '') => {
-  const logData = {
-    action,
-    email,
-    details,
-    timestamp: new Date().toISOString()
-  };
-  await callMongoAPI(env, 'insertOne', 'logs', { document: logData });
+// Logger Helper (D1)
+const logEvent = async (db, action, email, details = '') => {
+  await db.prepare('INSERT INTO logs (action, email, details, timestamp) VALUES (?, ?, ?, ?)')
+    .bind(action, email, details, new Date().toISOString())
+    .run();
 };
 
 // ---------------- MIDDLEWARE ----------------
@@ -98,26 +64,22 @@ app.post('/api/auth/register', async (c) => {
   const { email, password, name } = await c.req.json();
   if (!email || !password || !name) return c.json({ error: 'Vui lòng điền đủ thông tin' }, 400);
 
-  const existing = await callMongoAPI(c.env, 'findOne', 'users', { filter: { email } });
-  if (!existing.isMock && existing.document) {
+  const db = c.env.DB;
+
+  const existing = await db.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+  if (existing) {
     return c.json({ error: 'Email đã tồn tại' }, 400);
   }
 
   const hashedPassword = await hashPassword(password);
-  
   const role = email.toLowerCase().includes('admin') ? 'admin' : 'user';
+  const userId = crypto.randomUUID();
 
-  const user = {
-    id: crypto.randomUUID(),
-    email,
-    name,
-    password: hashedPassword,
-    role,
-    createdAt: new Date().toISOString()
-  };
+  await db.prepare('INSERT INTO users (id, email, name, password, role, createdAt) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(userId, email, name, hashedPassword, role, new Date().toISOString())
+    .run();
 
-  await callMongoAPI(c.env, 'insertOne', 'users', { document: user });
-  await logEvent(c.env, 'REGISTER', email, `Người dùng mới đăng ký: ${name}`);
+  await logEvent(db, 'REGISTER', email, `Người dùng mới đăng ký: ${name}`);
 
   return c.json({ success: true, message: 'Đăng ký thành công' });
 });
@@ -126,17 +88,13 @@ app.post('/api/auth/login', async (c) => {
   const { email, password } = await c.req.json();
   if (!email || !password) return c.json({ error: 'Vui lòng nhập email và mật khẩu' }, 400);
 
+  const db = c.env.DB;
   const hashedPassword = await hashPassword(password);
 
-  const response = await callMongoAPI(c.env, 'findOne', 'users', { filter: { email, password: hashedPassword } });
+  const user = await db.prepare('SELECT * FROM users WHERE email = ? AND password = ?')
+    .bind(email, hashedPassword)
+    .first();
 
-  if (response.isMock) {
-    const mockRole = email.includes('admin') ? 'admin' : 'user';
-    const token = await sign({ id: 'mock-id', role: mockRole, exp: Math.floor(Date.now() / 1000) + 86400 }, c.env.JWT_SECRET || 'secret');
-    return c.json({ success: true, token, user: { name: 'Mock User', email, role: mockRole } });
-  }
-
-  const user = response.document;
   if (!user) {
     return c.json({ error: 'Email hoặc mật khẩu không chính xác' }, 401);
   }
@@ -147,7 +105,7 @@ app.post('/api/auth/login', async (c) => {
     exp: Math.floor(Date.now() / 1000) + 86400 // 24 hours
   }, c.env.JWT_SECRET || 'secret');
 
-  await logEvent(c.env, 'LOGIN', email, `Đăng nhập thành công`);
+  await logEvent(db, 'LOGIN', email, `Đăng nhập thành công`);
 
   return c.json({
     success: true,
@@ -159,76 +117,71 @@ app.post('/api/auth/login', async (c) => {
 // ---------------- ADMIN API ----------------
 
 app.get('/api/admin/users', adminAuth, async (c) => {
-  const response = await callMongoAPI(c.env, 'find', 'users', { projection: { password: 0 } });
-  if (response.isMock) {
-    return c.json({ success: true, users: [
-      { id: '1', name: 'Mock Admin', email: 'admin@example.com', role: 'admin', createdAt: new Date().toISOString() }
-    ]});
-  }
-  return c.json({ success: true, users: response.documents || [] });
+  const db = c.env.DB;
+  const { results } = await db.prepare('SELECT id, name, email, role, avatarUrl, createdAt FROM users').all();
+  return c.json({ success: true, users: results || [] });
 });
 
 app.get('/api/admin/rooms', adminAuth, async (c) => {
-  const response = await callMongoAPI(c.env, 'find', 'rooms');
-  return c.json({ success: true, rooms: response.isMock ? [] : (response.documents || []) });
+  const db = c.env.DB;
+  const { results } = await db.prepare('SELECT * FROM rooms').all();
+  const rooms = (results || []).map(r => ({ ...r, members: JSON.parse(r.members || '[]') }));
+  return c.json({ success: true, rooms });
 });
 
 app.get('/api/admin/logs', adminAuth, async (c) => {
-  const response = await callMongoAPI(c.env, 'find', 'logs', { sort: { timestamp: -1 }, limit: 100 });
-  return c.json({ success: true, logs: response.isMock ? [] : (response.documents || []) });
+  const db = c.env.DB;
+  const { results } = await db.prepare('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100').all();
+  return c.json({ success: true, logs: results || [] });
 });
 
 // ---------------- USER API (Nhóm/Phòng & Cập nhật Profile) ----------------
 
 app.get('/api/user/rooms', requireAuth, async (c) => {
   const user = c.get('user');
-  const response = await callMongoAPI(c.env, 'find', 'rooms', { filter: { "members.id": user.id } });
-  return c.json({ success: true, rooms: response.isMock ? [] : (response.documents || []) });
+  const db = c.env.DB;
+  const { results } = await db.prepare('SELECT * FROM rooms').all();
+  // Lọc các phòng mà người dùng là thành viên
+  const userRooms = (results || []).filter(r => {
+    const members = JSON.parse(r.members || '[]');
+    return members.some(m => m.id === user.id);
+  }).map(r => ({ ...r, members: JSON.parse(r.members || '[]') }));
+  return c.json({ success: true, rooms: userRooms });
 });
 
 app.put('/api/user/profile', requireAuth, async (c) => {
   const user = c.get('user');
   const body = await c.req.json();
   const { newName, oldPassword, newPassword } = body;
+  const db = c.env.DB;
   
   if (!newName && !newPassword) return c.json({ error: 'Không có dữ liệu cập nhật' }, 400);
 
-  const userResponse = await callMongoAPI(c.env, 'findOne', 'users', { filter: { id: user.id } });
-  if (userResponse.isMock || !userResponse.document) {
+  const dbUser = await db.prepare('SELECT * FROM users WHERE id = ?').bind(user.id).first();
+  if (!dbUser) {
     return c.json({ error: 'Không tìm thấy người dùng' }, 404);
-  }
-  const dbUser = userResponse.document;
-
-  const updates = {};
-  let actionLog = '';
-
-  if (newName && newName !== dbUser.name) {
-    updates.name = newName;
-    actionLog = 'UPDATE_PROFILE_NAME';
   }
 
   if (newPassword) {
-    if (!oldPassword) return c.json({ error: 'Vui lòng nhập mật khẩu cũ' }, 400);
-    const oldHashed = await hashPassword(oldPassword);
-    if (dbUser.password !== oldHashed) {
-      return c.json({ error: 'Mật khẩu cũ không chính xác' }, 400);
+    if (!oldPassword) return c.json({ error: 'Cần nhập mật khẩu cũ' }, 400);
+    const hashedOld = await hashPassword(oldPassword);
+    if (hashedOld !== dbUser.password) {
+      return c.json({ error: 'Mật khẩu cũ không đúng' }, 400);
     }
-    updates.password = await hashPassword(newPassword);
-    actionLog = actionLog ? 'UPDATE_PROFILE_ALL' : 'UPDATE_PASSWORD';
+    const hashedNew = await hashPassword(newPassword);
+    await db.prepare('UPDATE users SET password = ? WHERE id = ?').bind(hashedNew, user.id).run();
   }
 
-  if (Object.keys(updates).length > 0) {
-    await callMongoAPI(c.env, 'updateOne', 'users', {
-      filter: { id: user.id },
-      update: { $set: updates }
-    });
-    await logEvent(c.env, actionLog, dbUser.email, 'Người dùng cập nhật thông tin cá nhân');
+  if (newName) {
+    await db.prepare('UPDATE users SET name = ? WHERE id = ?').bind(newName, user.id).run();
   }
 
-  // Update JWT if name changes? JWT only stores ID and Role. Name is returned in /auth/login.
-  // We can just return the new name to the client.
-  return c.json({ success: true, message: 'Cập nhật thành công', name: updates.name || dbUser.name });
+  await logEvent(db, 'UPDATE_PROFILE', dbUser.email, `Cập nhật hồ sơ`);
+
+  return c.json({ success: true, user: { name: newName || dbUser.name } });
 });
+
+// ---------------- AVATAR UPLOAD (ImgBB) ----------------
 
 app.post('/api/user/avatar', requireAuth, async (c) => {
   const user = c.get('user');
@@ -247,7 +200,6 @@ app.post('/api/user/avatar', requireAuth, async (c) => {
     const arrayBuffer = await file.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
-    // Xử lý tối ưu để chuyển Uint8Array sang chuỗi binary mà không bị lỗi RangeError với file lớn
     for (let i = 0; i < bytes.byteLength; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
@@ -270,14 +222,10 @@ app.post('/api/user/avatar', requireAuth, async (c) => {
     }
 
     const avatarUrl = imgbbData.data.url;
+    const db = c.env.DB;
     
-    // Cập nhật URL vào DB
-    await callMongoAPI(c.env, 'updateOne', 'users', {
-      filter: { id: user.id },
-      update: { $set: { avatarUrl } }
-    });
-    
-    await logEvent(c.env, 'UPDATE_AVATAR', user.email, 'Người dùng đã tải ảnh đại diện mới qua ImgBB');
+    await db.prepare('UPDATE users SET avatarUrl = ? WHERE id = ?').bind(avatarUrl, user.id).run();
+    await logEvent(db, 'UPDATE_AVATAR', user.email || 'unknown', 'Người dùng đã tải ảnh đại diện mới qua ImgBB');
     
     return c.json({ success: true, avatarUrl });
   } catch (err) {
@@ -289,35 +237,28 @@ app.post('/api/user/avatar', requireAuth, async (c) => {
 // ---------------- ROOMS & WEBSOCKETS (DURABLE OBJECTS) ----------------
 
 app.post('/api/rooms', requireAuth, async (c) => {
-  const body = await c.req.json()
-  const { roomName, hostId, hostName } = body
-  if (!hostId) return c.json({ error: 'hostId is required' }, 400)
-  
+  const { roomName, hostId, hostName } = await c.req.json()
   const id = c.env.ROOM_SESSION.newUniqueId()
   const roomId = id.toString()
+  const db = c.env.DB;
+
+  const members = JSON.stringify([{ id: hostId, name: hostName }]);
   
-  const roomData = { 
-    roomId, 
-    roomName: roomName || 'Phòng mới', 
-    hostId, 
-    createdBy: hostName, 
-    createdAt: new Date().toISOString(),
-    members: [{ id: hostId, name: hostName }] // Chủ phòng là thành viên mặc định
-  }
-  
-  await callMongoAPI(c.env, 'insertOne', 'rooms', { document: roomData })
+  await db.prepare('INSERT INTO rooms (id, roomName, hostId, hostName, createdAt, members) VALUES (?, ?, ?, ?, ?, ?)')
+    .bind(roomId, roomName || 'Phòng mới', hostId, hostName, new Date().toISOString(), members)
+    .run();
   
   const user = c.get('user');
-  // Log the email if available in payload, otherwise hostName
-  await logEvent(c.env, 'CREATE_ROOM', user.email || hostName, `Tạo phòng: ${roomId}`);
+  await logEvent(db, 'CREATE_ROOM', user.email || hostName, `Tạo phòng: ${roomId}`);
   
   const stub = c.env.ROOM_SESSION.get(id)
   await stub.fetch(new Request('http://internal/init', {
     method: 'POST',
-    body: JSON.stringify({ hostId, roomName: roomData.roomName }),
+    body: JSON.stringify({ hostId, roomName: roomName || 'Phòng mới' }),
     headers: { 'Content-Type': 'application/json' }
   }))
 
+  const roomData = { roomId, roomName: roomName || 'Phòng mới', hostId, createdBy: hostName, members: [{ id: hostId, name: hostName }] };
   return c.json({ success: true, room: roomData })
 })
 
@@ -325,11 +266,16 @@ app.post('/api/rooms/:roomId/join', requireAuth, async (c) => {
   const roomId = c.req.param('roomId');
   const user = c.get('user');
   const { userName } = await c.req.json();
+  const db = c.env.DB;
   
-  await callMongoAPI(c.env, 'updateOne', 'rooms', {
-    filter: { roomId },
-    update: { $addToSet: { members: { id: user.id, name: userName } } }
-  });
+  const room = await db.prepare('SELECT members FROM rooms WHERE id = ?').bind(roomId).first();
+  if (room) {
+    const members = JSON.parse(room.members || '[]');
+    if (!members.some(m => m.id === user.id)) {
+      members.push({ id: user.id, name: userName });
+    }
+    await db.prepare('UPDATE rooms SET members = ? WHERE id = ?').bind(JSON.stringify(members), roomId).run();
+  }
   
   return c.json({ success: true });
 });
@@ -337,11 +283,13 @@ app.post('/api/rooms/:roomId/join', requireAuth, async (c) => {
 app.post('/api/rooms/:roomId/leave', requireAuth, async (c) => {
   const roomId = c.req.param('roomId');
   const user = c.get('user');
+  const db = c.env.DB;
   
-  await callMongoAPI(c.env, 'updateOne', 'rooms', {
-    filter: { roomId },
-    update: { $pull: { members: { id: user.id } } }
-  });
+  const room = await db.prepare('SELECT members FROM rooms WHERE id = ?').bind(roomId).first();
+  if (room) {
+    const members = JSON.parse(room.members || '[]').filter(m => m.id !== user.id);
+    await db.prepare('UPDATE rooms SET members = ? WHERE id = ?').bind(JSON.stringify(members), roomId).run();
+  }
   
   return c.json({ success: true });
 });

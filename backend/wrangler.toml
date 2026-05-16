@@ -5,11 +5,13 @@ compatibility_flags = ["nodejs_compat"]
 
 
 [vars]
-# MONGODB_DATA_API_URL = "https://data.mongodb-api.com/app/data-xxxx/endpoint/data/v1"
-# MONGODB_API_KEY = "your-data-api-key"
-# MONGODB_CLUSTER_NAME = "Cluster0"
 JWT_SECRET = "super-secret-key-change-in-production"
 IMGBB_API_KEY = "VUI_LONG_NHAP_API_KEY_CUA_BAN_VAO_DAY"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "callteam_db"
+database_id = "60261bfe-c8f1-4d2d-8e55-1d78c1036440"
 
 [[durable_objects.bindings]]
 name = "ROOM_SESSION"
@@ -17,4 +19,4 @@ class_name = "RoomSession"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["RoomSession"]
+new_sqlite_classes = ["RoomSession"]
