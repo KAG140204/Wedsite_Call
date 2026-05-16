@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Video, LogOut, Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall } from 'lucide-react';
+import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall, X } from 'lucide-react';
+import GooeyProfileMenu from '../components/GooeyProfileMenu';
 
 export default function Home() {
   const [roomId, setRoomId] = useState('');
@@ -12,12 +13,25 @@ export default function Home() {
   const [myRooms, setMyRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   
-  const { user, logout, token } = useAuth();
+  const { user, updateUser, token } = useAuth();
   const navigate = useNavigate();
+
+  // Modal States
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showPassModal, setShowPassModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const [profileSuccess, setProfileSuccess] = useState('');
 
   useEffect(() => {
     if (!user) navigate('/login');
-    else fetchMyRooms();
+    else {
+      setNewName(user.name);
+      fetchMyRooms();
+    }
   }, [user, navigate]);
 
   const fetchMyRooms = async () => {
@@ -97,6 +111,33 @@ export default function Home() {
     }
   };
 
+  const updateProfile = async (bodyData) => {
+    setProfileLoading(true); setProfileError(''); setProfileSuccess('');
+    try {
+      const res = await fetch('http://127.0.0.1:8787/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(bodyData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProfileSuccess(data.message);
+        if (data.name) updateUser({ name: data.name });
+        setTimeout(() => {
+          setShowNameModal(false);
+          setShowPassModal(false);
+          setProfileSuccess('');
+        }, 1500);
+      } else {
+        setProfileError(data.error);
+      }
+    } catch (err) {
+      setProfileError('Lỗi kết nối máy chủ');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   if (!user) return null;
 
   return (
@@ -109,9 +150,6 @@ export default function Home() {
             Trang Quản Trị
           </button>
         )}
-        <button onClick={() => { logout(); navigate('/login'); }} className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/40 rounded-xl transition-all">
-          <LogOut className="w-4 h-4" /> Đăng xuất ({user.name})
-        </button>
       </div>
 
       <div className="w-full max-w-6xl z-10 mt-12 flex flex-col lg:flex-row gap-8">
@@ -119,7 +157,7 @@ export default function Home() {
         {/* Left Side: My Groups */}
         <div className="flex-1">
           <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-            <Users className="w-8 h-8 text-purple-400" /> Nhóm của tôi
+            <Users className="w-8 h-8 text-purple-400" /> Xin chào, {user.name}
           </h2>
           
           {loadingRooms ? (
@@ -199,8 +237,50 @@ export default function Home() {
             {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-2 rounded-lg border border-red-500/20">{error}</div>}
           </div>
         </div>
-
       </div>
+
+      {/* Tích hợp Nút Menu Nảy (Gooey Profile Menu) trôi nổi */}
+      <GooeyProfileMenu 
+        onUpdateName={() => { setShowNameModal(true); setProfileError(''); setProfileSuccess(''); setNewName(user.name); }} 
+        onUpdatePassword={() => { setShowPassModal(true); setProfileError(''); setProfileSuccess(''); setOldPass(''); setNewPass(''); }} 
+      />
+
+      {/* --- MODALS --- */}
+      {showNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-sm relative">
+            <button onClick={() => setShowNameModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+            <h3 className="text-xl font-bold text-white mb-4">Đổi Tên Hiển Thị</h3>
+            <div className="space-y-4">
+              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none" placeholder="Tên mới..." />
+              {profileError && <p className="text-red-400 text-sm">{profileError}</p>}
+              {profileSuccess && <p className="text-green-400 text-sm">{profileSuccess}</p>}
+              <button onClick={() => updateProfile({ newName })} disabled={profileLoading} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-medium transition-colors">
+                {profileLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-panel p-6 rounded-2xl w-full max-w-sm relative">
+            <button onClick={() => setShowPassModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+            <h3 className="text-xl font-bold text-white mb-4">Đổi Mật Khẩu</h3>
+            <div className="space-y-4">
+              <input type="password" value={oldPass} onChange={e => setOldPass(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 focus:outline-none" placeholder="Mật khẩu cũ" />
+              <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-white focus:border-pink-500 focus:outline-none" placeholder="Mật khẩu mới" />
+              {profileError && <p className="text-red-400 text-sm">{profileError}</p>}
+              {profileSuccess && <p className="text-green-400 text-sm">{profileSuccess}</p>}
+              <button onClick={() => updateProfile({ oldPassword: oldPass, newPassword: newPass })} disabled={profileLoading} className="w-full bg-pink-600 hover:bg-pink-500 text-white py-3 rounded-xl font-medium transition-colors">
+                {profileLoading ? 'Đang lưu...' : 'Cập Nhật Mật Khẩu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

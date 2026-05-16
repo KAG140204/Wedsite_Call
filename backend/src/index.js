@@ -178,12 +178,56 @@ app.get('/api/admin/logs', adminAuth, async (c) => {
   return c.json({ success: true, logs: response.isMock ? [] : (response.documents || []) });
 });
 
-// ---------------- USER API (Nhóm/Phòng) ----------------
+// ---------------- USER API (Nhóm/Phòng & Cập nhật Profile) ----------------
 
 app.get('/api/user/rooms', requireAuth, async (c) => {
   const user = c.get('user');
   const response = await callMongoAPI(c.env, 'find', 'rooms', { filter: { "members.id": user.id } });
   return c.json({ success: true, rooms: response.isMock ? [] : (response.documents || []) });
+});
+
+app.put('/api/user/profile', requireAuth, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.json();
+  const { newName, oldPassword, newPassword } = body;
+  
+  if (!newName && !newPassword) return c.json({ error: 'Không có dữ liệu cập nhật' }, 400);
+
+  const userResponse = await callMongoAPI(c.env, 'findOne', 'users', { filter: { id: user.id } });
+  if (userResponse.isMock || !userResponse.document) {
+    return c.json({ error: 'Không tìm thấy người dùng' }, 404);
+  }
+  const dbUser = userResponse.document;
+
+  const updates = {};
+  let actionLog = '';
+
+  if (newName && newName !== dbUser.name) {
+    updates.name = newName;
+    actionLog = 'UPDATE_PROFILE_NAME';
+  }
+
+  if (newPassword) {
+    if (!oldPassword) return c.json({ error: 'Vui lòng nhập mật khẩu cũ' }, 400);
+    const oldHashed = await hashPassword(oldPassword);
+    if (dbUser.password !== oldHashed) {
+      return c.json({ error: 'Mật khẩu cũ không chính xác' }, 400);
+    }
+    updates.password = await hashPassword(newPassword);
+    actionLog = actionLog ? 'UPDATE_PROFILE_ALL' : 'UPDATE_PASSWORD';
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await callMongoAPI(c.env, 'updateOne', 'users', {
+      filter: { id: user.id },
+      update: { $set: updates }
+    });
+    await logEvent(c.env, actionLog, dbUser.email, 'Người dùng cập nhật thông tin cá nhân');
+  }
+
+  // Update JWT if name changes? JWT only stores ID and Role. Name is returned in /auth/login.
+  // We can just return the new name to the client.
+  return c.json({ success: true, message: 'Cập nhật thành công', name: updates.name || dbUser.name });
 });
 
 // ---------------- ROOMS & WEBSOCKETS (DURABLE OBJECTS) ----------------

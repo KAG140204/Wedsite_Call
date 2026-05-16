@@ -1,0 +1,127 @@
+/* Nền tảng CSS để tích hợp hiệu ứng SVG filter vào HTML Element */
+.gooey-menu {
+  filter: url('#shadowed-goo');
+  position: relative;
+  width: 80px;
+  height: 80px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.menu-item,
+.menu-open-button {
+  background: #3b82f6; /* Blue 500 default */
+  border-radius: 100%;
+  width: 60px;
+  height: 60px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  text-align: center;
+  line-height: 60px;
+  transform: translate3d(0, 0, 0);
+  transition: transform ease-out 200ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.menu-open-button {
+  z-index: 2;
+  transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.44);
+  transition-duration: 400ms;
+  transform: scale(1.1) translate3d(0, 0, 0);
+  cursor: pointer;
+}
+
+.menu-open-button:hover {
+  transform: scale(1.2) translate3d(0, 0, 0);
+}
+
+.menu-open {
+  display: none;
+}
+
+/* Các gạch ngang tạo biểu tượng Hamburger */
+.lines {
+  width: 25px;
+  height: 3px;
+  background: white;
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-left: -12.5px;
+  margin-top: -1.5px;
+  transition: transform 200ms;
+}
+
+.line-1 {
+  transform: translate3d(0, -8px, 0);
+}
+
+.line-2 {
+  transform: translate3d(0, 0, 0);
+}
+
+.line-3 {
+  transform: translate3d(0, 8px, 0);
+}
+
+/* Animation khi menu mở -> Biến thành dấu X */
+.menu-open:checked + .menu-open-button .line-1 {
+  transform: translate3d(0, 0, 0) rotate(45deg);
+}
+
+.menu-open:checked + .menu-open-button .line-2 {
+  transform: translate3d(0, 0, 0) scale(0.1, 1);
+}
+
+.menu-open:checked + .menu-open-button .line-3 {
+  transform: translate3d(0, 0, 0) rotate(-45deg);
+}
+
+/* Các nút con - khi đang đóng */
+.menu-item {
+  background: #6b7280;
+}
+.menu-item:hover {
+  background: #4b5563;
+  color: white;
+}
+.menu-item:nth-child(3) {
+  transition-duration: 180ms;
+}
+.menu-item:nth-child(4) {
+  transition-duration: 180ms;
+}
+.menu-item:nth-child(5) {
+  transition-duration: 180ms;
+}
+
+/* Nảy các nút con lên trên khi mở menu */
+.menu-open:checked ~ .menu-item {
+  transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.menu-open:checked ~ .menu-item:nth-child(3) {
+  transition-duration: 190ms;
+  /* Bắn lên trên - cao nhất */
+  transform: translate3d(0, -160px, 0);
+}
+
+.menu-open:checked ~ .menu-item:nth-child(4) {
+  transition-duration: 290ms;
+  /* Bắn lên trên - giữa */
+  transform: translate3d(0, -80px, 0);
+}
+
+.menu-open:checked ~ .menu-item:nth-child(5) {
+  transition-duration: 390ms;
+  /* Bắn chéo sang trái */
+  transform: translate3d(-70px, -40px, 0);
+}
