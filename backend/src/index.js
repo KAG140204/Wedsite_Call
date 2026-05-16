@@ -237,40 +237,53 @@ app.post('/api/user/avatar', requireAuth, async (c) => {
   
   if (!file || typeof file === 'string') return c.json({ error: 'Không tìm thấy file ảnh hợp lệ' }, 400);
   
-  // Tạo tên file ngẫu nhiên để chống ghi đè
-  const extension = file.name.split('.').pop() || 'png';
-  const filename = `${user.id}-${crypto.randomUUID()}.${extension}`;
-  
-  // Tải lên R2 Bucket
-  await c.env.AVATAR_BUCKET.put(filename, file.stream(), {
-    httpMetadata: { contentType: file.type }
-  });
-  
-  const avatarUrl = `/api/avatar/${filename}`;
-  
-  // Cập nhật URL vào DB
-  await callMongoAPI(c.env, 'updateOne', 'users', {
-    filter: { id: user.id },
-    update: { $set: { avatarUrl } }
-  });
-  
-  await logEvent(c.env, 'UPDATE_AVATAR', user.email, 'Người dùng đã tải ảnh đại diện mới');
-  
-  return c.json({ success: true, avatarUrl });
-});
+  const imgbbKey = c.env.IMGBB_API_KEY;
+  if (!imgbbKey || imgbbKey.includes('VUI_LONG_NHAP')) {
+    return c.json({ error: 'Chưa cấu hình API Key cho ImgBB trên Server' }, 500);
+  }
 
-app.get('/api/avatar/:filename', async (c) => {
-  const filename = c.req.param('filename');
-  const object = await c.env.AVATAR_BUCKET.get(filename);
-  
-  if (!object) return new Response('Avatar not found', { status: 404 });
-  
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set('etag', object.httpEtag);
-  headers.set('Cache-Control', 'public, max-age=31536000'); // Cache 1 năm
-  
-  return new Response(object.body, { headers });
+  try {
+    // Convert File to Base64
+    const arrayBuffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    // Xử lý tối ưu để chuyển Uint8Array sang chuỗi binary mà không bị lỗi RangeError với file lớn
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    const base64String = btoa(binary);
+
+    // Post to ImgBB
+    const formData = new FormData();
+    formData.append('key', imgbbKey);
+    formData.append('image', base64String);
+    formData.append('name', `${user.id.substring(0,8)}-${Date.now()}`);
+
+    const imgbbRes = await fetch('https://api.imgbb.com/1/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const imgbbData = await imgbbRes.json();
+
+    if (!imgbbData.success) {
+      return c.json({ error: 'Lỗi từ ImgBB: ' + (imgbbData.error?.message || 'Không xác định') }, 500);
+    }
+
+    const avatarUrl = imgbbData.data.url;
+    
+    // Cập nhật URL vào DB
+    await callMongoAPI(c.env, 'updateOne', 'users', {
+      filter: { id: user.id },
+      update: { $set: { avatarUrl } }
+    });
+    
+    await logEvent(c.env, 'UPDATE_AVATAR', user.email, 'Người dùng đã tải ảnh đại diện mới qua ImgBB');
+    
+    return c.json({ success: true, avatarUrl });
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: 'Lỗi kết nối máy chủ ImgBB' }, 500);
+  }
 });
 
 // ---------------- ROOMS & WEBSOCKETS (DURABLE OBJECTS) ----------------

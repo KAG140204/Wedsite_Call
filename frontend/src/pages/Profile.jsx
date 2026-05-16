@@ -29,6 +29,11 @@ export default function Profile() {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Kích thước ảnh vượt quá 5MB. Vui lòng chọn ảnh nhỏ hơn.');
+      return;
+    }
+
     setUploadingAvatar(true);
     const formData = new FormData();
     formData.append('avatar', file);
@@ -49,6 +54,7 @@ export default function Profile() {
       alert('Lỗi kết nối máy chủ');
     } finally {
       setUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -117,7 +123,7 @@ export default function Profile() {
             <div className="relative group mb-6">
               <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-5xl font-bold shadow-xl border-4 border-gray-800 overflow-hidden">
                 {user.avatarUrl ? (
-                  <img src={`http://127.0.0.1:8787${user.avatarUrl}`} alt="Avatar" className="w-full h-full object-cover" />
+                  <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   user.name.charAt(0).toUpperCase()
                 )}
