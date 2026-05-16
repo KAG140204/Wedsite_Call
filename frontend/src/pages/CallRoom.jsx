@@ -429,7 +429,7 @@ export default function CallRoom() {
 
       </div>
 
-      <footer className="h-24 flex items-center justify-center px-6 pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10 shrink-0">
+      <footer className="h-20 sm:h-24 flex items-center justify-center px-4 sm:px-6 pb-3 sm:pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10 shrink-0">
         <button onClick={toggleMic} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${micOn ? 'glass-button hover:bg-gray-700' : 'bg-red-500 text-white hover:bg-red-600'}`}>
           {micOn ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
         </button>
@@ -438,7 +438,7 @@ export default function CallRoom() {
           {videoOn ? <VideoIcon className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
         </button>
         
-        <button onClick={toggleScreenShare} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center ml-2 sm:ml-4 transition-all shadow-lg ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-700'}`} title="Chia sẻ màn hình">
+        <button onClick={toggleScreenShare} className={`hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-full items-center justify-center ml-2 sm:ml-4 transition-all shadow-lg ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-700'}`} title="Chia sẻ màn hình">
           <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
         

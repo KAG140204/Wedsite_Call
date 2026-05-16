@@ -6,7 +6,7 @@ export default function Landing() {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen w-full bg-gray-950 text-white font-sans overflow-hidden">
+    <div className="min-h-screen w-full bg-gray-950 text-white font-sans overflow-y-auto">
       {/* Background Effects */}
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-purple-600/30 blur-[120px] rounded-full pointer-events-none"></div>
@@ -40,12 +40,12 @@ export default function Landing() {
           Đã tích hợp WebRTC & PeerJS
         </div>
         
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-8 leading-tight">
+        <h1 className="text-3xl sm:text-5xl md:text-7xl font-extrabold tracking-tight mb-6 sm:mb-8 leading-tight">
           Họp trực tuyến <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-indigo-400">Không giới hạn.</span>
         </h1>
         
-        <p className="text-lg md:text-xl text-gray-400 max-w-2xl mb-12">
+        <p className="text-base sm:text-lg md:text-xl text-gray-400 max-w-2xl mb-8 sm:mb-12 px-2">
           Trải nghiệm video call đỉnh cao với độ trễ bằng 0. Hoạt động trên nền tảng Cloudflare Edge siêu tốc. Dành riêng cho đội nhóm của bạn.
         </p>
 

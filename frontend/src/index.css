@@ -26,14 +26,16 @@ body {
   margin: 0;
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height cho mobile */
   min-width: 100vw;
-  overflow: hidden; /* For app-like feel */
+  overflow-x: hidden; /* Chỉ chặn cuộn ngang, cho phép cuộn dọc */
   background: radial-gradient(circle at center, #1f2937 0%, #111827 100%);
 }
 
 #root {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }

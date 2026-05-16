@@ -111,7 +111,7 @@ export default function Profile() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center p-6 relative text-white">
+    <div className="min-h-screen bg-gray-950 flex flex-col items-center p-4 sm:p-6 relative text-white overflow-y-auto pb-24">
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
 
       <div className="w-full max-w-4xl z-10 mt-10">

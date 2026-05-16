@@ -101,7 +101,7 @@ export default function Home() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-6 relative bg-gray-950">
+    <div className="min-h-screen w-full flex flex-col items-center p-4 sm:p-6 relative bg-gray-950 overflow-y-auto pb-24">
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
       
       <div className="absolute top-4 right-4 z-20 flex gap-4">
