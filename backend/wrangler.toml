@@ -17,3 +17,7 @@ class_name = "RoomSession"
 [[migrations]]
 tag = "v1"
 new_classes = ["RoomSession"]
+
+[[r2_buckets]]
+binding = "AVATAR_BUCKET"
+bucket_name = "callteam-avatars"

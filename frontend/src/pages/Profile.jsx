@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { User, Shield, Lock, Save, ArrowLeft } from 'lucide-react';
+import { User, Shield, Lock, Save, ArrowLeft, Camera } from 'lucide-react';
 
 export default function Profile() {
   const { user, updateUser, token } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
   const [newName, setNewName] = useState('');
   const [oldPass, setOldPass] = useState('');
   const [newPass, setNewPass] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -22,6 +24,33 @@ export default function Profile() {
       setNewName(user.name);
     }
   }, [user, navigate]);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingAvatar(true);
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const res = await fetch('http://127.0.0.1:8787/api/user/avatar', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        updateUser({ avatarUrl: data.avatarUrl });
+      } else {
+        alert(data.error || 'Lỗi tải ảnh');
+      }
+    } catch (err) {
+      alert('Lỗi kết nối máy chủ');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
@@ -84,9 +113,29 @@ export default function Profile() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Cột trái: Avatar & Thông tin chung */}
           <div className="glass-panel p-8 rounded-3xl flex flex-col items-center text-center">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-5xl font-bold mb-6 shadow-xl border-4 border-gray-800">
-              {user.name.charAt(0).toUpperCase()}
+            
+            <div className="relative group mb-6">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-5xl font-bold shadow-xl border-4 border-gray-800 overflow-hidden">
+                {user.avatarUrl ? (
+                  <img src={`http://127.0.0.1:8787${user.avatarUrl}`} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  user.name.charAt(0).toUpperCase()
+                )}
+              </div>
+              <div 
+                onClick={() => fileInputRef.current.click()}
+                className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity"
+              >
+                <Camera className="w-8 h-8 text-white" />
+              </div>
+              <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
+              {uploadingAvatar && (
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-t-white border-white/30 rounded-full animate-spin"></div>
+                </div>
+              )}
             </div>
+
             <h2 className="text-2xl font-bold">{user.name}</h2>
             <p className="text-gray-400 mb-6">{user.email}</p>
             

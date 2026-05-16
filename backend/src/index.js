@@ -152,7 +152,7 @@ app.post('/api/auth/login', async (c) => {
   return c.json({
     success: true,
     token,
-    user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    user: { id: user.id, name: user.name, email: user.email, role: user.role, avatarUrl: user.avatarUrl }
   });
 });
 
@@ -228,6 +228,49 @@ app.put('/api/user/profile', requireAuth, async (c) => {
   // Update JWT if name changes? JWT only stores ID and Role. Name is returned in /auth/login.
   // We can just return the new name to the client.
   return c.json({ success: true, message: 'Cập nhật thành công', name: updates.name || dbUser.name });
+});
+
+app.post('/api/user/avatar', requireAuth, async (c) => {
+  const user = c.get('user');
+  const body = await c.req.parseBody();
+  const file = body['avatar'];
+  
+  if (!file || typeof file === 'string') return c.json({ error: 'Không tìm thấy file ảnh hợp lệ' }, 400);
+  
+  // Tạo tên file ngẫu nhiên để chống ghi đè
+  const extension = file.name.split('.').pop() || 'png';
+  const filename = `${user.id}-${crypto.randomUUID()}.${extension}`;
+  
+  // Tải lên R2 Bucket
+  await c.env.AVATAR_BUCKET.put(filename, file.stream(), {
+    httpMetadata: { contentType: file.type }
+  });
+  
+  const avatarUrl = `/api/avatar/${filename}`;
+  
+  // Cập nhật URL vào DB
+  await callMongoAPI(c.env, 'updateOne', 'users', {
+    filter: { id: user.id },
+    update: { $set: { avatarUrl } }
+  });
+  
+  await logEvent(c.env, 'UPDATE_AVATAR', user.email, 'Người dùng đã tải ảnh đại diện mới');
+  
+  return c.json({ success: true, avatarUrl });
+});
+
+app.get('/api/avatar/:filename', async (c) => {
+  const filename = c.req.param('filename');
+  const object = await c.env.AVATAR_BUCKET.get(filename);
+  
+  if (!object) return new Response('Avatar not found', { status: 404 });
+  
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set('etag', object.httpEtag);
+  headers.set('Cache-Control', 'public, max-age=31536000'); // Cache 1 năm
+  
+  return new Response(object.body, { headers });
 });
 
 // ---------------- ROOMS & WEBSOCKETS (DURABLE OBJECTS) ----------------
