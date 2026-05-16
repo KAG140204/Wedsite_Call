@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List, Search, Trash2, ShieldCheck, ShieldOff, BarChart3, TrendingUp, UserCheck, Gamepad2 } from 'lucide-react';
+import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List, Search, Trash2, ShieldCheck, ShieldOff, BarChart3, TrendingUp, UserCheck, Gamepad2, FileText, Calendar } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 // ========== MINI CHART COMPONENT ==========
@@ -85,6 +85,13 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [logFilter, setLogFilter] = useState('ALL');
+  
+  // Report state
+  const [report, setReport] = useState(null);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0];
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
     if (!user || user.role !== 'admin') {
@@ -133,6 +140,28 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   };
+
+  const fetchReport = async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch(`${API_BASE_URL}/api/admin/report?from=${dateFrom}&to=${dateTo}`);
+      if (!res) return;
+      const data = await res.json();
+      if (data.success) {
+        setReport(data.report);
+      } else {
+        setError(data.error);
+      }
+    } catch (err) {
+      setError('Lỗi lấy báo cáo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports') fetchReport();
+  }, [activeTab, dateFrom, dateTo]);
 
   // --- DELETE USER ---
   const handleDeleteUser = async (userId, email) => {
@@ -242,6 +271,13 @@ export default function AdminDashboard() {
           >
             <Activity className="w-5 h-5" /> Nhật ký (Logs)
           </button>
+
+          <button 
+            onClick={() => { setActiveTab('reports'); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${activeTab === 'reports' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+          >
+            <FileText className="w-5 h-5" /> Báo Cáo
+          </button>
         </nav>
 
         <div className="mt-auto space-y-2 pt-4 border-t border-gray-800">
@@ -270,21 +306,42 @@ export default function AdminDashboard() {
 
         {/* --- TAB HEADER --- */}
         <header className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            {activeTab === 'users' && 'Quản lý Tài Khoản'}
-            {activeTab === 'rooms' && 'Quản lý Phòng'}
-            {activeTab === 'logs' && 'Nhật Ký Hệ Thống'}
-          </h1>
-          <p className="text-gray-400">
-            {activeTab === 'users' && `Hiển thị ${filteredUsers.length}/${users.length} tài khoản`}
-            {activeTab === 'rooms' && `Hiển thị ${filteredRooms.length}/${rooms.length} phòng`}
-            {activeTab === 'logs' && `Hiển thị ${filteredLogs.length}/${logs.length} bản ghi`}
-          </p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">
+                {activeTab === 'users' && 'Quản lý Tài Khoản'}
+                {activeTab === 'rooms' && 'Quản lý Phòng'}
+                {activeTab === 'logs' && 'Nhật Ký Hệ Thống'}
+                {activeTab === 'reports' && 'Báo Cáo Tổng Hợp'}
+              </h1>
+              <p className="text-gray-400">
+                {activeTab === 'users' && `Hiển thị ${filteredUsers.length}/${users.length} tài khoản`}
+                {activeTab === 'rooms' && `Hiển thị ${filteredRooms.length}/${rooms.length} phòng`}
+                {activeTab === 'logs' && `Hiển thị ${filteredLogs.length}/${logs.length} bản ghi`}
+                {activeTab === 'reports' && 'Xem thống kê chi tiết theo khoảng thời gian tùy chọn.'}
+              </p>
+            </div>
+            
+            {/* Date Picker for Reports */}
+            {activeTab === 'reports' && (
+              <div className="flex items-center gap-3 bg-gray-900 border border-gray-700 p-2 rounded-xl">
+                <div className="flex items-center gap-2 px-2">
+                  <Calendar className="w-4 h-4 text-gray-400" />
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none" />
+                </div>
+                <span className="text-gray-500">-</span>
+                <div className="px-2">
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="bg-transparent text-sm text-white focus:outline-none" />
+                </div>
+              </div>
+            )}
+          </div>
         </header>
 
         {/* --- SEARCH & FILTER BAR --- */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
-          <div className="relative flex-1">
+        {activeTab !== 'reports' && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
+            <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
             <input
               type="text"
@@ -312,6 +369,7 @@ export default function AdminDashboard() {
             </select>
           )}
         </div>
+        )}
 
         {error && <div className="bg-red-500/10 border border-red-500/50 text-red-400 p-4 rounded-xl mb-6">{error}</div>}
 
@@ -396,23 +454,27 @@ export default function AdminDashboard() {
                       <th className="p-4 font-medium">Mã ID</th>
                       <th className="p-4 font-medium">Người Tạo (Host)</th>
                       <th className="p-4 font-medium">Số Thành Viên</th>
+                      <th className="p-4 font-medium text-center">Ngày tạo</th>
+                      <th className="p-4 font-medium text-center">Cập nhật cuối</th>
                       <th className="p-4 font-medium text-center">Hành động</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredRooms.length === 0 ? (
-                      <tr><td colSpan="5" className="p-4 text-center text-gray-500">Không tìm thấy kết quả</td></tr>
+                      <tr><td colSpan="7" className="p-4 text-center text-gray-500">Không tìm thấy kết quả</td></tr>
                     ) : filteredRooms.map((r, i) => (
                       <tr key={r.roomId || i} className="border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors">
                         <td className="p-4 font-medium text-white">{r.roomName}</td>
-                        <td className="p-4 text-gray-400 font-mono text-sm max-w-[200px] truncate">{r.roomId}</td>
-                        <td className="p-4 text-purple-300">{r.hostName || 'Unknown'}</td>
+                        <td className="p-4 text-gray-400 font-mono text-sm max-w-[150px] truncate">{r.roomId}</td>
+                        <td className="p-4 text-purple-300 max-w-[150px] truncate">{r.hostName || 'Unknown'}</td>
                         <td className="p-4 text-gray-300">
                           <span className="inline-flex items-center gap-1">
                             <Users className="w-4 h-4 text-purple-400" />
                             {r.members ? r.members.length : 1}
                           </span>
                         </td>
+                        <td className="p-4 text-center text-gray-400 text-sm">{r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'N/A'}</td>
+                        <td className="p-4 text-center text-gray-400 text-sm">{r.updatedAt ? new Date(r.updatedAt).toLocaleString('vi-VN', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'N/A'}</td>
                         <td className="p-4 text-center">
                           <button
                             onClick={() => handleDeleteRoom(r.roomId, r.roomName)}
@@ -460,6 +522,56 @@ export default function AdminDashboard() {
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {/* ====== REPORTS UI ====== */}
+              {activeTab === 'reports' && report && (
+                <div className="p-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1">Tài khoản mới</p>
+                      <p className="text-3xl font-bold text-blue-400">+{report.newUsers}</p>
+                    </div>
+                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1">Phòng đã tạo</p>
+                      <p className="text-3xl font-bold text-purple-400">+{report.newRooms}</p>
+                    </div>
+                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1">Lượt đăng nhập</p>
+                      <p className="text-3xl font-bold text-green-400">{report.totalLogins}</p>
+                    </div>
+                    <div className="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 text-center">
+                      <p className="text-gray-400 mb-1">Tổng Action logs</p>
+                      <p className="text-3xl font-bold text-orange-400">{report.totalActions}</p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-bold text-white mb-4">Chi tiết theo ngày</h3>
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-900 border-b border-gray-800 text-gray-400 text-sm">
+                        <th className="p-4 font-medium">Ngày</th>
+                        <th className="p-4 font-medium text-blue-400">Đăng nhập</th>
+                        <th className="p-4 font-medium text-green-400">Đăng ký</th>
+                        <th className="p-4 font-medium text-purple-400">Tạo phòng</th>
+                        <th className="p-4 font-medium text-gray-500">Hoạt động khác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.daily.length === 0 ? (
+                        <tr><td colSpan="5" className="p-4 text-center text-gray-500">Không có dữ liệu trong khoảng thời gian này</td></tr>
+                      ) : report.daily.map((d, i) => (
+                        <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/20">
+                          <td className="p-4 font-medium text-white">{new Date(d.date).toLocaleDateString('vi-VN')}</td>
+                          <td className="p-4 text-gray-300">{d.logins}</td>
+                          <td className="p-4 text-gray-300">{d.registers}</td>
+                          <td className="p-4 text-gray-300">{d.rooms}</td>
+                          <td className="p-4 text-gray-500">{d.others}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}

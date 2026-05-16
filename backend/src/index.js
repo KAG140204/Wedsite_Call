@@ -221,6 +221,41 @@ app.put('/api/admin/users/:userId/role', adminAuth, async (c) => {
   return c.json({ success: true });
 });
 
+// --- Admin Report (Date Range) ---
+app.get('/api/admin/report', adminAuth, async (c) => {
+  const db = c.env.DB;
+  const from = c.req.query('from'); // YYYY-MM-DD
+  const to = c.req.query('to');     // YYYY-MM-DD
+  
+  if (!from || !to) return c.json({ error: 'Cần truyền from và to' }, 400);
+  
+  const toNext = to + 'T23:59:59';
+  
+  // Thống kê tổng
+  const newUsers = (await db.prepare("SELECT COUNT(*) as count FROM users WHERE createdAt >= ? AND createdAt <= ?").bind(from, toNext).first()).count;
+  const newRooms = (await db.prepare("SELECT COUNT(*) as count FROM rooms WHERE createdAt >= ? AND createdAt <= ?").bind(from, toNext).first()).count;
+  const totalLogins = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE action = 'LOGIN' AND timestamp >= ? AND timestamp <= ?").bind(from, toNext).first()).count;
+  const totalActions = (await db.prepare("SELECT COUNT(*) as count FROM logs WHERE timestamp >= ? AND timestamp <= ?").bind(from, toNext).first()).count;
+  
+  // Breakdown theo ngày
+  const { results: logRows } = await db.prepare("SELECT * FROM logs WHERE timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC").bind(from, toNext).all();
+  
+  const dailyMap = {};
+  (logRows || []).forEach(l => {
+    const day = l.timestamp?.split('T')[0];
+    if (!day) return;
+    if (!dailyMap[day]) dailyMap[day] = { date: day, logins: 0, registers: 0, rooms: 0, others: 0 };
+    if (l.action === 'LOGIN') dailyMap[day].logins++;
+    else if (l.action === 'REGISTER') dailyMap[day].registers++;
+    else if (l.action === 'CREATE_ROOM') dailyMap[day].rooms++;
+    else dailyMap[day].others++;
+  });
+  
+  const daily = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+  
+  return c.json({ success: true, report: { newUsers, newRooms, totalLogins, totalActions, daily } });
+});
+
 // ---------------- USER API (Nhóm/Phòng & Cập nhật Profile) ----------------
 
 app.get('/api/user/rooms', requireAuth, async (c) => {
@@ -330,8 +365,8 @@ app.post('/api/rooms', requireAuth, async (c) => {
 
   const members = JSON.stringify([{ id: hostId, name: hostName }]);
   
-  await db.prepare('INSERT INTO rooms (id, roomName, hostId, hostName, createdAt, members) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(roomId, roomName || 'Phòng mới', hostId, hostName, new Date().toISOString(), members)
+  await db.prepare('INSERT INTO rooms (id, roomName, hostId, hostName, createdAt, updatedAt, members) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(roomId, roomName || 'Phòng mới', hostId, hostName, new Date().toISOString(), new Date().toISOString(), members)
     .run();
   
   const user = c.get('user');
@@ -360,7 +395,7 @@ app.post('/api/rooms/:roomId/join', requireAuth, async (c) => {
     if (!members.some(m => m.id === user.id)) {
       members.push({ id: user.id, name: userName });
     }
-    await db.prepare('UPDATE rooms SET members = ? WHERE id = ?').bind(JSON.stringify(members), roomId).run();
+    await db.prepare('UPDATE rooms SET members = ?, updatedAt = ? WHERE id = ?').bind(JSON.stringify(members), new Date().toISOString(), roomId).run();
   }
   
   return c.json({ success: true });
@@ -374,7 +409,7 @@ app.post('/api/rooms/:roomId/leave', requireAuth, async (c) => {
   const room = await db.prepare('SELECT members FROM rooms WHERE id = ?').bind(roomId).first();
   if (room) {
     const members = JSON.parse(room.members || '[]').filter(m => m.id !== user.id);
-    await db.prepare('UPDATE rooms SET members = ? WHERE id = ?').bind(JSON.stringify(members), roomId).run();
+    await db.prepare('UPDATE rooms SET members = ?, updatedAt = ? WHERE id = ?').bind(JSON.stringify(members), new Date().toISOString(), roomId).run();
   }
   
   return c.json({ success: true });
