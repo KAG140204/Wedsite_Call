@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export default function Register() {
@@ -38,6 +39,9 @@ export default function Register() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative">
       <div className="glass-panel w-full max-w-md rounded-2xl p-8 relative z-10 shadow-2xl">
+        <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors text-sm font-medium">
+          <ArrowLeft className="w-4 h-4" /> ← Quay về Kaysor
+        </button>
         <h1 className="text-3xl font-bold text-center text-white mb-2">Tạo Tài Khoản</h1>
         <p className="text-gray-400 text-center mb-8">Nền tảng gọi Video nhóm chất lượng cao</p>
         
