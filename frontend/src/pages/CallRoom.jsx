@@ -21,7 +21,7 @@ const VideoPlayer = ({ stream, isMuted, isLocal }) => {
       autoPlay
       playsInline
       muted={isMuted || isLocal} // Luôn tắt tiếng video của chính mình để tránh dội âm (Echo)
-      className={`w-full h-full object-cover ${isLocal ? 'scale-x-[-1]' : ''}`} // Lật ngược video bản thân như gương
+      className={`w-full h-full object-contain bg-black/80 ${isLocal ? 'scale-x-[-1]' : ''}`} // Thay object-cover thành object-contain để không bị cắt xén
     />
   );
 };
@@ -314,9 +314,18 @@ export default function CallRoom() {
 
   const isHost = user.id === hostId;
   const totalUsers = participants.length + 1;
-  let gridCols = 'grid-cols-1 md:grid-cols-2';
-  if (totalUsers > 4) gridCols = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
-  if (totalUsers > 12) gridCols = 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+  
+  // Logic chia cột grid linh hoạt dựa trên số người
+  let gridCols = 'grid-cols-1';
+  if (totalUsers === 2) {
+    gridCols = 'grid-cols-1 sm:grid-cols-2';
+  } else if (totalUsers >= 3 && totalUsers <= 4) {
+    gridCols = 'grid-cols-2';
+  } else if (totalUsers >= 5 && totalUsers <= 8) {
+    gridCols = 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4';
+  } else if (totalUsers > 8) {
+    gridCols = 'grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
+  }
 
   return (
     <div className="h-screen w-full flex flex-col bg-gray-950 text-white overflow-hidden">
