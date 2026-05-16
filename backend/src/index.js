@@ -126,7 +126,7 @@ app.get('/api/admin/users', adminAuth, async (c) => {
 app.get('/api/admin/rooms', adminAuth, async (c) => {
   const db = c.env.DB;
   const { results } = await db.prepare('SELECT * FROM rooms').all();
-  const rooms = (results || []).map(r => ({ ...r, members: JSON.parse(r.members || '[]') }));
+  const rooms = (results || []).map(r => ({ ...r, roomId: r.id, members: JSON.parse(r.members || '[]') }));
   return c.json({ success: true, rooms });
 });
 
@@ -146,7 +146,7 @@ app.get('/api/user/rooms', requireAuth, async (c) => {
   const userRooms = (results || []).filter(r => {
     const members = JSON.parse(r.members || '[]');
     return members.some(m => m.id === user.id);
-  }).map(r => ({ ...r, members: JSON.parse(r.members || '[]') }));
+  }).map(r => ({ ...r, roomId: r.id, members: JSON.parse(r.members || '[]') }));
   return c.json({ success: true, rooms: userRooms });
 });
 

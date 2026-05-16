@@ -13,7 +13,7 @@ export default function Home() {
   const [myRooms, setMyRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   
-  const { user, token } = useAuth();
+  const { user, authFetch } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,9 +23,8 @@ export default function Home() {
 
   const fetchMyRooms = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/rooms`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await authFetch(`${API_BASE_URL}/api/user/rooms`);
+      if (!res) return;
       const data = await res.json();
       if (data.success) setMyRooms(data.rooms);
     } catch (err) {
@@ -42,11 +41,12 @@ export default function Home() {
     setIsLoading(true); setError('');
     
     try {
-      const res = await fetch(`${API_BASE_URL}/api/rooms`, {
+      const res = await authFetch(`${API_BASE_URL}/api/rooms`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomName, hostId: user.id, hostName: user.name })
       });
+      if (!res) return;
       const data = await res.json();
       
       if (data.success) {
@@ -67,11 +67,12 @@ export default function Home() {
     
     setIsLoading(true); setError('');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/join`, {
+      const res = await authFetch(`${API_BASE_URL}/api/rooms/${roomId}/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userName: user.name })
       });
+      if (!res) return;
       const data = await res.json();
       if (data.success) {
         navigate(`/room/${roomId}`);
@@ -88,9 +89,8 @@ export default function Home() {
   const handleLeaveGroup = async (roomIdToLeave) => {
     if (!window.confirm("Bạn có chắc chắn muốn rời khỏi nhóm này vĩnh viễn?")) return;
     try {
-      await fetch(`${API_BASE_URL}/api/rooms/${roomIdToLeave}/leave`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+      await authFetch(`${API_BASE_URL}/api/rooms/${roomIdToLeave}/leave`, {
+        method: 'POST'
       });
       setMyRooms(prev => prev.filter(r => r.roomId !== roomIdToLeave));
     } catch (err) {

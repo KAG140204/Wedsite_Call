@@ -6,7 +6,7 @@ import { User, Shield, Lock, Save, ArrowLeft, Camera } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export default function Profile() {
-  const { user, updateUser, token } = useAuth();
+  const { user, updateUser, authFetch } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
@@ -41,11 +41,11 @@ export default function Profile() {
     formData.append('avatar', file);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/avatar`, {
+      const res = await authFetch(`${API_BASE_URL}/api/user/avatar`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
+      if (!res) return; // 401 → auto logout
       const data = await res.json();
       if (data.success) {
         updateUser({ avatarUrl: data.avatarUrl });
@@ -85,16 +85,17 @@ export default function Profile() {
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
+      const res = await authFetch(`${API_BASE_URL}/api/user/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData)
       });
+      if (!res) return; // 401 → auto logout
       const data = await res.json();
       
       if (data.success) {
-        setSuccess(data.message);
-        if (data.name) updateUser({ name: data.name });
+        setSuccess('Cập nhật thành công!');
+        if (data.user?.name) updateUser({ name: data.user.name });
         setOldPass('');
         setNewPass('');
       } else {

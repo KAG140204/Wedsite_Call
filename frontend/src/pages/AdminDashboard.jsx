@@ -5,7 +5,7 @@ import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List } from 'luci
 import { API_BASE_URL } from '../config';
 
 export default function AdminDashboard() {
-  const { user, token, logout } = useAuth();
+  const { user, authFetch, logout } = useAuth();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('users'); // users, rooms, logs
@@ -27,11 +27,8 @@ export default function AdminDashboard() {
   const fetchData = async (tab) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/${tab}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const res = await authFetch(`${API_BASE_URL}/api/admin/${tab}`);
+      if (!res) return;
       const data = await res.json();
       if (data.success) {
         if (tab === 'users') setUsers(data.users || []);
