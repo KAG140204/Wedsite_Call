@@ -6,7 +6,14 @@ const app = new Hono()
 
 // Apply CORS to all routes
 app.use('/*', cors({
-  origin: '*',
+  origin: (origin) => {
+    // Chỉ cho phép localhost (dev) và kaysor-call.pages.dev (prod) gọi API
+    if (!origin) return 'https://kaysor-call.pages.dev';
+    if (origin.includes('localhost') || origin.includes('kaysor-call.pages.dev')) {
+      return origin;
+    }
+    return 'https://kaysor-call.pages.dev';
+  },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization']
 }))
@@ -491,11 +498,22 @@ export class RoomSession {
     if (request.headers.get("Upgrade") === "websocket") {
       const userId = url.searchParams.get('userId');
       const userName = url.searchParams.get('userName');
+      const token = url.searchParams.get('token');
       const parts = url.pathname.split('/');
       this.roomId = parts[parts.length - 1];
 
-      if (!userId || !userName) {
-        return new Response("Missing user info", { status: 400 });
+      if (!userId || !userName || !token) {
+        return new Response("Missing auth info", { status: 400 });
+      }
+
+      // Xác thực JWT bảo mật tuyệt đối cho WebSocket
+      try {
+        const payload = await verify(token, this.env.JWT_SECRET || 'secret', 'HS256');
+        if (payload.id !== userId) {
+          return new Response("Unauthorized Fake ID", { status: 403 });
+        }
+      } catch (err) {
+        return new Response("Invalid Token", { status: 401 });
       }
 
       if (!this.hostId) {

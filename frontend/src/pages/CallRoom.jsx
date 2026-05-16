@@ -102,7 +102,8 @@ export default function CallRoom() {
 
     // 3. Kết nối WebSocket
     const connectWS = () => {
-      const wsUrl = `${WS_BASE_URL}/api/ws/${roomId}?userId=${user.id}&userName=${encodeURIComponent(user.name)}`;
+      const token = localStorage.getItem('token');
+      const wsUrl = `${WS_BASE_URL}/api/ws/${roomId}?userId=${user.id}&userName=${encodeURIComponent(user.name)}&token=${token}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
