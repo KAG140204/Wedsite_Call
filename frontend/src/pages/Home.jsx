@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall } from 'lucide-react';
+import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall, Copy, Check } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export default function Home() {
@@ -12,6 +12,7 @@ export default function Home() {
   
   const [myRooms, setMyRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const [copiedId, setCopiedId] = useState(null);
   
   const { user, authFetch } = useAuth();
   const navigate = useNavigate();
@@ -138,7 +139,24 @@ export default function Home() {
                       <h3 className="text-xl font-bold text-white mb-1 truncate pr-2">{room.roomName}</h3>
                       {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30 shrink-0">Host</span>}
                     </div>
-                    <p className="text-xs text-gray-500 font-mono mb-3 truncate" title={room.roomId || room.id}>ID: {room.roomId || room.id}</p>
+                    
+                    <div className="flex items-center gap-2 mb-3 bg-gray-900/50 rounded-lg p-2 w-fit">
+                      <p className="text-xs text-gray-400 font-mono truncate max-w-[200px]" title={room.roomId || room.id}>
+                        ID: {room.roomId || room.id}
+                      </p>
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigator.clipboard.writeText(room.roomId || room.id);
+                          setCopiedId(room.roomId || room.id);
+                          setTimeout(() => setCopiedId(null), 2000);
+                        }}
+                        className="p-1 hover:bg-gray-700 rounded-md transition-colors shrink-0"
+                        title="Sao chép ID phòng"
+                      >
+                        {copiedId === (room.roomId || room.id) ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-gray-500 hover:text-white" />}
+                      </button>
+                    </div>
                     
                     {/* Hiển thị danh sách thành viên */}
                     <div className="mb-3">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X } from 'lucide-react';
+import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
@@ -40,6 +40,7 @@ export default function CallRoom() {
   const [videoOn, setVideoOn] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [error, setError] = useState('');
+  const [copiedId, setCopiedId] = useState(null);
 
   // --- CHAT STATE ---
   const [messages, setMessages] = useState([]);
@@ -355,13 +356,29 @@ export default function CallRoom() {
               <button onClick={handleRename} className="text-xs bg-purple-600 hover:bg-purple-500 px-3 py-1.5 rounded-md font-medium">Lưu</button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 ml-2 group">
-              <h2 className="font-semibold text-lg">{roomName}</h2>
-              {isHost && (
-                <button onClick={() => setIsEditingName(true)} className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-all" title="Đổi tên phòng">
-                  <Edit2 className="w-4 h-4" />
+            <div className="flex flex-col ml-3">
+              <div className="flex items-center gap-2 group">
+                <h2 className="font-semibold text-lg">{roomName}</h2>
+                {isHost && (
+                  <button onClick={() => setIsEditingName(true)} className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-all" title="Đổi tên phòng">
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400 font-mono mt-0.5">
+                <span>ID: {roomId}</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(roomId);
+                    setCopiedId(roomId);
+                    setTimeout(() => setCopiedId(null), 2000);
+                  }}
+                  className="p-1 hover:text-white transition-colors flex items-center justify-center bg-gray-800/50 rounded hover:bg-gray-700"
+                  title="Sao chép ID phòng"
+                >
+                  {copiedId === roomId ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                 </button>
-              )}
+              </div>
             </div>
           )}
         </div>
