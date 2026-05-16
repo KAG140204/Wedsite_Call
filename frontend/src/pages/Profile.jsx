@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { User, Shield, Lock, Save, ArrowLeft, Camera } from 'lucide-react';
 
+import { API_BASE_URL } from '../config';
+
 export default function Profile() {
   const { user, updateUser, token } = useAuth();
   const navigate = useNavigate();
@@ -39,7 +41,7 @@ export default function Profile() {
     formData.append('avatar', file);
 
     try {
-      const res = await fetch('http://127.0.0.1:8787/api/user/avatar', {
+      const res = await fetch(`${API_BASE_URL}/api/user/avatar`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formData
@@ -83,7 +85,7 @@ export default function Profile() {
     }
 
     try {
-      const res = await fetch('http://127.0.0.1:8787/api/user/profile', {
+      const res = await fetch(`${API_BASE_URL}/api/user/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(bodyData)

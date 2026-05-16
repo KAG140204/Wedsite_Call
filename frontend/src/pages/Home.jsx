@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export default function Home() {
   const [roomId, setRoomId] = useState('');
@@ -22,7 +23,7 @@ export default function Home() {
 
   const fetchMyRooms = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8787/api/user/rooms', {
+      const res = await fetch(`${API_BASE_URL}/api/user/rooms`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -41,7 +42,7 @@ export default function Home() {
     setIsLoading(true); setError('');
     
     try {
-      const res = await fetch('http://127.0.0.1:8787/api/rooms', {
+      const res = await fetch(`${API_BASE_URL}/api/rooms`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ roomName, hostId: user.id, hostName: user.name })
@@ -66,7 +67,7 @@ export default function Home() {
     
     setIsLoading(true); setError('');
     try {
-      const res = await fetch(`http://127.0.0.1:8787/api/rooms/${roomId}/join`, {
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${roomId}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ userName: user.name })
@@ -87,7 +88,7 @@ export default function Home() {
   const handleLeaveGroup = async (roomIdToLeave) => {
     if (!window.confirm("Bạn có chắc chắn muốn rời khỏi nhóm này vĩnh viễn?")) return;
     try {
-      await fetch(`http://127.0.0.1:8787/api/rooms/${roomIdToLeave}/leave`, {
+      await fetch(`${API_BASE_URL}/api/rooms/${roomIdToLeave}/leave`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

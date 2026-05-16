@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export default function AdminDashboard() {
   const { user, token, logout } = useAuth();
@@ -26,7 +27,7 @@ export default function AdminDashboard() {
   const fetchData = async (tab) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8787/api/admin/${tab}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/${tab}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

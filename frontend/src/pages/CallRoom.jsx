@@ -3,6 +3,7 @@ import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, Message
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
+import { API_BASE_URL, WS_BASE_URL } from '../config';
 
 // Component hiển thị Video Stream
 const VideoPlayer = ({ stream, isMuted, isLocal }) => {
@@ -99,12 +100,12 @@ export default function CallRoom() {
 
     // 3. Kết nối WebSocket
     const connectWS = () => {
-      const wsUrl = `ws://127.0.0.1:8787/api/ws/${roomId}?userId=${user.id}&userName=${encodeURIComponent(user.name)}`;
+      const wsUrl = `${WS_BASE_URL}/api/ws/${roomId}?userId=${user.id}&userName=${encodeURIComponent(user.name)}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        fetch(`http://127.0.0.1:8787/api/rooms/${roomId}`)
+        fetch(`${API_BASE_URL}/api/rooms/${roomId}`)
           .then(res => res.json())
           .then(data => {
             if (isMounted && data.success) {
