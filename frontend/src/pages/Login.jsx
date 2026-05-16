@@ -55,7 +55,7 @@ export default function Login() {
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative">
       <div className="glass-panel w-full max-w-md rounded-2xl p-8 relative z-10 shadow-2xl">
         <button onClick={() => navigate('/')} className="flex items-center gap-2 text-gray-400 hover:text-white mb-4 transition-colors text-sm font-medium">
-          <ArrowLeft className="w-4 h-4" /> ← Quay về Kaysor
+          <ArrowLeft className="w-4 h-4" /> Quay về trang chủ
         </button>
         <h1 className="text-3xl font-bold text-center text-white mb-2">Đăng Nhập</h1>
         <p className="text-gray-400 text-center mb-8">Chào mừng trở lại!</p>

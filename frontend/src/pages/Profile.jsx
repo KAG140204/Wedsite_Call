@@ -116,7 +116,7 @@ export default function Profile() {
 
       <div className="w-full max-w-4xl z-10 mt-10">
         <button onClick={() => navigate('/home')} className="flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors font-medium">
-          <ArrowLeft className="w-5 h-5" /> ← Quay về Kaysor
+          <ArrowLeft className="w-5 h-5" /> Quay về trang chủ
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
