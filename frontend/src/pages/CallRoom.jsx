@@ -428,7 +428,8 @@ export default function CallRoom() {
         </main>
 
         {/* Chat Sidebar Panel */}
-        <aside className={`relative z-20 w-80 lg:w-96 glass-panel border-l border-gray-800 flex flex-col transition-all duration-300 transform ${isChatOpen ? 'translate-x-0' : 'translate-x-full absolute right-0 h-full invisible'}`}>
+        {isChatOpen && (
+          <aside className="relative z-20 w-full md:w-80 lg:w-96 glass-panel border-l border-gray-800 flex flex-col h-full animate-in slide-in-from-right-8 duration-300">
           <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-400" /> Trò chuyện
@@ -480,7 +481,7 @@ export default function CallRoom() {
             </div>
           </form>
         </aside>
-
+        )}
       </div>
 
       <footer className="h-20 sm:h-24 flex items-center justify-center px-4 sm:px-6 pb-3 sm:pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10 shrink-0">
