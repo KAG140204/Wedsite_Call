@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Video, LogOut, Plus, LogIn } from 'lucide-react';
+import { Video, LogOut, Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall } from 'lucide-react';
 
 export default function Home() {
   const [roomId, setRoomId] = useState('');
@@ -9,24 +9,41 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const { user, logout } = useAuth();
+  const [myRooms, setMyRooms] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) navigate('/login');
+    else fetchMyRooms();
   }, [user, navigate]);
+
+  const fetchMyRooms = async () => {
+    try {
+      const res = await fetch('http://127.0.0.1:8787/api/user/rooms', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) setMyRooms(data.rooms);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
     if (!roomName) return setError('Vui lòng nhập tên phòng muốn tạo');
     
-    setIsLoading(true);
-    setError('');
+    setIsLoading(true); setError('');
     
     try {
       const res = await fetch('http://127.0.0.1:8787/api/rooms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ roomName, hostId: user.id, hostName: user.name })
       });
       const data = await res.json();
@@ -43,81 +60,144 @@ export default function Home() {
     }
   };
 
-  const handleJoinRoom = (e) => {
+  const handleJoinRoomAPI = async (e) => {
     e.preventDefault();
     if (!roomId) return setError('Vui lòng nhập ID phòng');
-    navigate(`/room/${roomId}`);
+    
+    setIsLoading(true); setError('');
+    try {
+      const res = await fetch(`http://127.0.0.1:8787/api/rooms/${roomId}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ userName: user.name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        navigate(`/room/${roomId}`);
+      } else {
+        setError(data.error || 'Lỗi tham gia phòng');
+      }
+    } catch (err) {
+      setError('Lỗi kết nối máy chủ');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLeaveGroup = async (roomIdToLeave) => {
+    if (!window.confirm("Bạn có chắc chắn muốn rời khỏi nhóm này vĩnh viễn?")) return;
+    try {
+      await fetch(`http://127.0.0.1:8787/api/rooms/${roomIdToLeave}/leave`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setMyRooms(prev => prev.filter(r => r.roomId !== roomIdToLeave));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (!user) return null;
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 relative bg-gray-950">
+    <div className="min-h-screen w-full flex flex-col items-center p-6 relative bg-gray-950">
       <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
       
-      <div className="absolute top-4 right-4 z-20">
+      <div className="absolute top-4 right-4 z-20 flex gap-4">
+        {user.role === 'admin' && (
+          <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/40 rounded-xl transition-all">
+            Trang Quản Trị
+          </button>
+        )}
         <button onClick={() => { logout(); navigate('/login'); }} className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/50 hover:bg-red-500/40 rounded-xl transition-all">
           <LogOut className="w-4 h-4" /> Đăng xuất ({user.name})
         </button>
       </div>
 
-      <div className="glass-panel w-full max-w-4xl rounded-3xl p-8 relative z-10 shadow-2xl flex flex-col md:flex-row gap-8">
+      <div className="w-full max-w-6xl z-10 mt-12 flex flex-col lg:flex-row gap-8">
         
-        {/* Create Room Section */}
-        <div className="flex-1 border-r border-gray-700/50 pr-0 md:pr-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
-              <Plus className="w-6 h-6 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">Tạo Phòng Mới</h2>
-          </div>
-          <p className="text-gray-400 mb-6">Bạn sẽ là Chủ Phòng (Host). Bạn có quyền đổi tên phòng và mời/đuổi người khác.</p>
+        {/* Left Side: My Groups */}
+        <div className="flex-1">
+          <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
+            <Users className="w-8 h-8 text-purple-400" /> Nhóm của tôi
+          </h2>
           
-          <form onSubmit={handleCreateRoom} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Tên phòng (Tùy chọn)</label>
-              <input 
-                type="text" 
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                placeholder="VD: Họp dự án cuối năm"
-              />
+          {loadingRooms ? (
+            <div className="text-gray-400">Đang tải danh sách nhóm...</div>
+          ) : myRooms.length === 0 ? (
+            <div className="glass-panel p-8 rounded-2xl text-center text-gray-400">
+              Bạn chưa tham gia nhóm nào. Hãy tạo hoặc nhập mã ID để tham gia.
             </div>
-            <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-              {isLoading ? 'Đang tạo...' : 'Tạo Phòng Ngay'}
-            </button>
-          </form>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {myRooms.map(room => (
+                <div key={room.roomId} className="glass-panel p-6 rounded-2xl border border-gray-800 hover:border-purple-500/50 transition-all group flex flex-col justify-between h-48">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-xl font-bold text-white mb-1 truncate">{room.roomName}</h3>
+                      {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30">Host</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 font-mono mb-4">ID: {room.roomId}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
+                      <Users className="w-4 h-4" /> {room.members?.length || 1} thành viên
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 mt-4">
+                    <button 
+                      onClick={() => navigate(`/room/${room.roomId}`)}
+                      className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <PhoneCall className="w-4 h-4" /> Tham gia Call
+                    </button>
+                    <button 
+                      onClick={() => handleLeaveGroup(room.roomId)}
+                      className="px-3 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500/50 rounded-lg transition-colors flex items-center justify-center"
+                      title="Rời nhóm"
+                    >
+                      <LeaveIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Join Room Section */}
-        <div className="flex-1 pl-0 md:pl-8 mt-8 md:mt-0">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center shadow-lg">
-              <LogIn className="w-6 h-6 text-gray-300" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">Tham Gia Phòng</h2>
-          </div>
-          <p className="text-gray-400 mb-6">Nhập Mã phòng (ID) do chủ phòng cung cấp để tham gia họp.</p>
-          
-          <form onSubmit={handleJoinRoom} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Mã Phòng (Room ID)</label>
+        {/* Right Side: Create / Join Actions */}
+        <div className="w-full lg:w-96 flex flex-col gap-6">
+          <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-purple-400" /> Tạo Nhóm Mới
+            </h3>
+            <form onSubmit={handleCreateRoom} className="space-y-4">
               <input 
-                type="text" 
-                required
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)}
+                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                placeholder="Tên nhóm (VD: Dự án cuối năm)"
+              />
+              <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
+                {isLoading ? 'Đang tạo...' : 'Tạo Nhóm'}
+              </button>
+            </form>
+          </div>
+
+          <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <LogIn className="w-5 h-5 text-blue-400" /> Tham Gia Mã ID
+            </h3>
+            <form onSubmit={handleJoinRoomAPI} className="space-y-4">
+              <input 
+                type="text" required value={roomId} onChange={(e) => setRoomId(e.target.value)}
+                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                 placeholder="Nhập mã ID..."
               />
-            </div>
-            <button type="submit" className="w-full glass-button text-white font-semibold py-4 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-              Tham Gia
-            </button>
-          </form>
-
-          {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-2 rounded-lg border border-red-500/20">{error}</div>}
+              <button type="submit" className="w-full glass-button text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
+                Gia Nhập
+              </button>
+            </form>
+            {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-2 rounded-lg border border-red-500/20">{error}</div>}
+          </div>
         </div>
 
       </div>

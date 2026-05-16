@@ -53,13 +53,51 @@ const callMongoAPI = async (env, action, collection, payload = {}) => {
   return await response.json();
 }
 
+// Logger Helper
+const logEvent = async (env, action, email, details = '') => {
+  const logData = {
+    action,
+    email,
+    details,
+    timestamp: new Date().toISOString()
+  };
+  await callMongoAPI(env, 'insertOne', 'logs', { document: logData });
+};
+
+// ---------------- MIDDLEWARE ----------------
+
+const requireAuth = async (c, next) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return c.json({ error: 'Chưa xác thực token' }, 401);
+  }
+  
+  const token = authHeader.split(' ')[1];
+  try {
+    const payload = await verify(token, c.env.JWT_SECRET || 'secret');
+    c.set('user', payload);
+    await next();
+  } catch (err) {
+    return c.json({ error: 'Token không hợp lệ hoặc đã hết hạn' }, 401);
+  }
+};
+
+const adminAuth = async (c, next) => {
+  await requireAuth(c, async () => {
+    const user = c.get('user');
+    if (user.role !== 'admin') {
+      return c.json({ error: 'Truy cập bị từ chối: Chỉ dành cho Admin' }, 403);
+    }
+    await next();
+  });
+};
+
 // ---------------- AUTH API ----------------
 
 app.post('/api/auth/register', async (c) => {
   const { email, password, name } = await c.req.json();
   if (!email || !password || !name) return c.json({ error: 'Vui lòng điền đủ thông tin' }, 400);
 
-  // Check existing user
   const existing = await callMongoAPI(c.env, 'findOne', 'users', { filter: { email } });
   if (!existing.isMock && existing.document) {
     return c.json({ error: 'Email đã tồn tại' }, 400);
@@ -67,7 +105,6 @@ app.post('/api/auth/register', async (c) => {
 
   const hashedPassword = await hashPassword(password);
   
-  // Tự động cấp quyền admin nếu email chứa chữ "admin" (theo yêu cầu)
   const role = email.toLowerCase().includes('admin') ? 'admin' : 'user';
 
   const user = {
@@ -80,6 +117,7 @@ app.post('/api/auth/register', async (c) => {
   };
 
   await callMongoAPI(c.env, 'insertOne', 'users', { document: user });
+  await logEvent(c.env, 'REGISTER', email, `Người dùng mới đăng ký: ${name}`);
 
   return c.json({ success: true, message: 'Đăng ký thành công' });
 });
@@ -93,7 +131,6 @@ app.post('/api/auth/login', async (c) => {
   const response = await callMongoAPI(c.env, 'findOne', 'users', { filter: { email, password: hashedPassword } });
 
   if (response.isMock) {
-    // Mock login if no DB configured
     const mockRole = email.includes('admin') ? 'admin' : 'user';
     const token = await sign({ id: 'mock-id', role: mockRole, exp: Math.floor(Date.now() / 1000) + 86400 }, c.env.JWT_SECRET || 'secret');
     return c.json({ success: true, token, user: { name: 'Mock User', email, role: mockRole } });
@@ -110,6 +147,8 @@ app.post('/api/auth/login', async (c) => {
     exp: Math.floor(Date.now() / 1000) + 86400 // 24 hours
   }, c.env.JWT_SECRET || 'secret');
 
+  await logEvent(c.env, 'LOGIN', email, `Đăng nhập thành công`);
+
   return c.json({
     success: true,
     token,
@@ -119,55 +158,59 @@ app.post('/api/auth/login', async (c) => {
 
 // ---------------- ADMIN API ----------------
 
-const adminAuth = async (c, next) => {
-  const authHeader = c.req.header('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return c.json({ error: 'Chưa xác thực token' }, 401);
-  }
-  
-  const token = authHeader.split(' ')[1];
-  try {
-    const payload = await verify(token, c.env.JWT_SECRET || 'secret');
-    if (payload.role !== 'admin') {
-      return c.json({ error: 'Truy cập bị từ chối: Chỉ dành cho Admin' }, 403);
-    }
-    c.set('user', payload);
-    await next();
-  } catch (err) {
-    return c.json({ error: 'Token không hợp lệ hoặc đã hết hạn' }, 401);
-  }
-};
-
 app.get('/api/admin/users', adminAuth, async (c) => {
   const response = await callMongoAPI(c.env, 'find', 'users', { projection: { password: 0 } });
-  
   if (response.isMock) {
     return c.json({ success: true, users: [
-      { id: '1', name: 'Mock Admin', email: 'admin@example.com', role: 'admin', createdAt: new Date().toISOString() },
-      { id: '2', name: 'John Doe', email: 'john@example.com', role: 'user', createdAt: new Date().toISOString() }
+      { id: '1', name: 'Mock Admin', email: 'admin@example.com', role: 'admin', createdAt: new Date().toISOString() }
     ]});
   }
-
   return c.json({ success: true, users: response.documents || [] });
+});
+
+app.get('/api/admin/rooms', adminAuth, async (c) => {
+  const response = await callMongoAPI(c.env, 'find', 'rooms');
+  return c.json({ success: true, rooms: response.isMock ? [] : (response.documents || []) });
+});
+
+app.get('/api/admin/logs', adminAuth, async (c) => {
+  const response = await callMongoAPI(c.env, 'find', 'logs', { sort: { timestamp: -1 }, limit: 100 });
+  return c.json({ success: true, logs: response.isMock ? [] : (response.documents || []) });
+});
+
+// ---------------- USER API (Nhóm/Phòng) ----------------
+
+app.get('/api/user/rooms', requireAuth, async (c) => {
+  const user = c.get('user');
+  const response = await callMongoAPI(c.env, 'find', 'rooms', { filter: { "members.id": user.id } });
+  return c.json({ success: true, rooms: response.isMock ? [] : (response.documents || []) });
 });
 
 // ---------------- ROOMS & WEBSOCKETS (DURABLE OBJECTS) ----------------
 
-app.post('/api/rooms', async (c) => {
+app.post('/api/rooms', requireAuth, async (c) => {
   const body = await c.req.json()
   const { roomName, hostId, hostName } = body
   if (!hostId) return c.json({ error: 'hostId is required' }, 400)
   
-  // Tạo một Durable Object ID duy nhất cho phòng này
   const id = c.env.ROOM_SESSION.newUniqueId()
   const roomId = id.toString()
   
-  const roomData = { roomId, roomName: roomName || 'Phòng mới', hostId, createdBy: hostName, createdAt: new Date().toISOString() }
+  const roomData = { 
+    roomId, 
+    roomName: roomName || 'Phòng mới', 
+    hostId, 
+    createdBy: hostName, 
+    createdAt: new Date().toISOString(),
+    members: [{ id: hostId, name: hostName }] // Chủ phòng là thành viên mặc định
+  }
   
-  // Lưu db
   await callMongoAPI(c.env, 'insertOne', 'rooms', { document: roomData })
   
-  // Khởi tạo Durable Object với hostId
+  const user = c.get('user');
+  // Log the email if available in payload, otherwise hostName
+  await logEvent(c.env, 'CREATE_ROOM', user.email || hostName, `Tạo phòng: ${roomId}`);
+  
   const stub = c.env.ROOM_SESSION.get(id)
   await stub.fetch(new Request('http://internal/init', {
     method: 'POST',
@@ -177,6 +220,31 @@ app.post('/api/rooms', async (c) => {
 
   return c.json({ success: true, room: roomData })
 })
+
+app.post('/api/rooms/:roomId/join', requireAuth, async (c) => {
+  const roomId = c.req.param('roomId');
+  const user = c.get('user');
+  const { userName } = await c.req.json();
+  
+  await callMongoAPI(c.env, 'updateOne', 'rooms', {
+    filter: { roomId },
+    update: { $addToSet: { members: { id: user.id, name: userName } } }
+  });
+  
+  return c.json({ success: true });
+});
+
+app.post('/api/rooms/:roomId/leave', requireAuth, async (c) => {
+  const roomId = c.req.param('roomId');
+  const user = c.get('user');
+  
+  await callMongoAPI(c.env, 'updateOne', 'rooms', {
+    filter: { roomId },
+    update: { $pull: { members: { id: user.id } } }
+  });
+  
+  return c.json({ success: true });
+});
 
 app.get('/api/rooms/:roomId', async (c) => {
   const roomId = c.req.param('roomId')
@@ -196,7 +264,6 @@ app.get('/api/ws/:roomId', async (c) => {
   try {
     const id = c.env.ROOM_SESSION.idFromString(roomId)
     const stub = c.env.ROOM_SESSION.get(id)
-    // Chuyển tiếp Request nâng cấp WebSocket vào Durable Object
     return stub.fetch(c.req.raw)
   } catch (err) {
     return c.text('Invalid Room ID', 400)
@@ -208,7 +275,7 @@ export class RoomSession {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.sessions = new Map(); // ws -> userData
+    this.sessions = new Map();
     this.roomName = 'Phòng Mới';
     this.hostId = null;
   }
@@ -216,7 +283,6 @@ export class RoomSession {
   async fetch(request) {
     const url = new URL(request.url);
 
-    // Xử lý init phòng
     if (request.method === 'POST' && url.pathname === '/init') {
       const data = await request.json();
       this.hostId = data.hostId;
@@ -224,7 +290,6 @@ export class RoomSession {
       return new Response(JSON.stringify({ success: true }));
     }
 
-    // Xử lý lấy thông tin phòng
     if (request.method === 'GET' && url.pathname === '/info') {
       return new Response(JSON.stringify({
         roomName: this.roomName,
@@ -233,7 +298,6 @@ export class RoomSession {
       }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Xử lý WebSocket
     if (request.headers.get("Upgrade") === "websocket") {
       const userId = url.searchParams.get('userId');
       const userName = url.searchParams.get('userName');
@@ -243,7 +307,7 @@ export class RoomSession {
       }
 
       if (!this.hostId) {
-        this.hostId = userId; // Dự phòng: người đầu tiên vào là Host
+        this.hostId = userId;
       }
 
       const { 0: client, 1: server } = new WebSocketPair();
@@ -258,21 +322,18 @@ export class RoomSession {
     webSocket.accept();
     this.sessions.set(webSocket, userData);
 
-    // Báo cho mọi người có người mới vào
     this.broadcast({ type: 'user_joined', user: userData, participants: Array.from(this.sessions.values()) });
 
     webSocket.addEventListener('message', async (msg) => {
       try {
         const data = JSON.parse(msg.data);
         
-        // Host đổi tên phòng
         if (data.type === 'rename') {
           if (userData.id === this.hostId) {
             this.roomName = data.roomName;
             this.broadcast({ type: 'room_renamed', roomName: data.roomName });
           }
         } 
-        // Host kick người khác
         else if (data.type === 'kick') {
           if (userData.id === this.hostId) {
             for (let [ws, u] of this.sessions.entries()) {
