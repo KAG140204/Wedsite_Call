@@ -186,6 +186,56 @@ export default function CallRoom() {
     };
   }, [roomId, user, navigate]);
 
+  // --- GOOGLE MEET WORKAROUND: Auto-stop camera on background to save Mic on iOS ---
+  const wasVideoOnBeforeHidden = useRef(false);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        // Trình duyệt bị thu nhỏ hoặc vuốt sang app khác (Background)
+        if (videoOn && !isScreenSharing) {
+          wasVideoOnBeforeHidden.current = true;
+          // TẮT NGAY LẬP TỨC phần cứng camera để iOS Safari không phong tỏa toàn bộ tab
+          if (localStreamRef.current) {
+            const track = localStreamRef.current.getVideoTracks()[0];
+            if (track) track.stop();
+          }
+          setVideoOn(false);
+        }
+      } else {
+        // Người dùng quay lại trình duyệt (Foreground)
+        if (wasVideoOnBeforeHidden.current && !isScreenSharing) {
+          try {
+            // Tự động xin lại quyền và mở lại camera
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const newTrack = stream.getVideoTracks()[0];
+            
+            if (localStreamRef.current) {
+              const oldTrack = localStreamRef.current.getVideoTracks()[0];
+              if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+              localStreamRef.current.addTrack(newTrack);
+            }
+
+            if (peerRef.current) {
+              Object.keys(peerRef.current.connections).forEach(peerId => {
+                const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
+                const sender = senders.find(s => s.track && s.track.kind === 'video');
+                if (sender) sender.replaceTrack(newTrack);
+              });
+            }
+            setVideoOn(true);
+          } catch (err) {
+            console.error("Lỗi khi khôi phục Camera từ background", err);
+          }
+          wasVideoOnBeforeHidden.current = false;
+        }
+      }
+    };
+    
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [videoOn, isScreenSharing]);
+
   const handleLeave = () => {
     navigate('/home');
   };
