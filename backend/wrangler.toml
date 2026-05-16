@@ -1,0 +1,19 @@
+name = "backend"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+
+[vars]
+# MONGODB_DATA_API_URL = "https://data.mongodb-api.com/app/data-xxxx/endpoint/data/v1"
+# MONGODB_API_KEY = "your-data-api-key"
+# MONGODB_CLUSTER_NAME = "Cluster0"
+JWT_SECRET = "super-secret-key-change-in-production"
+
+[[durable_objects.bindings]]
+name = "ROOM_SESSION"
+class_name = "RoomSession"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["RoomSession"]
