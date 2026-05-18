@@ -26,6 +26,37 @@ const VideoPlayer = ({ stream, isMuted, isLocal }) => {
   );
 };
 
+// Tạo một stream ảo (Silent Audio và Black Video) để làm nền tảng WebRTC khởi tạo không cần xin quyền ngay
+const createEmptyStream = () => {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContextClass();
+    const oscillator = audioContext.createOscillator();
+    const dst = audioContext.createMediaStreamDestination();
+    oscillator.connect(dst);
+    oscillator.start();
+    const silentAudioTrack = dst.stream.getAudioTracks()[0];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, 640, 480);
+    const stream = canvas.captureStream ? canvas.captureStream(1) : null;
+    const blackVideoTrack = stream ? stream.getVideoTracks()[0] : null;
+
+    const emptyStream = new MediaStream();
+    if (silentAudioTrack) emptyStream.addTrack(silentAudioTrack);
+    if (blackVideoTrack) emptyStream.addTrack(blackVideoTrack);
+    
+    return emptyStream;
+  } catch (e) {
+    console.error('Failed to create empty placeholder stream', e);
+    return new MediaStream();
+  }
+};
+
 export default function CallRoom() {
   const { roomId } = useParams();
   const [roomName, setRoomName] = useState('Đang tải...');
@@ -70,27 +101,14 @@ export default function CallRoom() {
     let isMounted = true;
     let peer = null;
 
-    // 1. Khởi tạo Local Stream (Camera & Mic)
+    // 1. Khởi tạo Local Stream (Dùng Silent Audio và Black Video ảo làm mặc định)
     const initMedia = async () => {
-      let stream = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localStreamRef.current = stream;
-        
-        // Mặc định tắt hoàn toàn phần cứng (mic/cam) khi mới vào phòng để bảo mật
-        stream.getAudioTracks().forEach(track => track.stop());
-        stream.getVideoTracks().forEach(track => track.stop());
-      } catch (err) {
-        console.warn('Không thể truy cập Camera/Microphone lúc khởi tạo:', err);
-        setError('Không thể truy cập Camera/Microphone. Bạn vẫn có thể tham gia phòng và bật lại thiết bị sau.');
-        // Tự động xóa thông báo lỗi sau 5 giây để không che màn hình
-        setTimeout(() => {
-          if (isMounted) setError('');
-        }, 5000);
-      }
+      // Khởi tạo stream ảo để tránh hỏi quyền và bật đèn xanh ngay lập tức khi vào phòng
+      // Điều này cũng giải quyết hoàn toàn lỗi iOS Safari chặn camera lúc load trang.
+      localStreamRef.current = createEmptyStream();
       
       try {
-        // 2. Khởi tạo PeerJS (Luôn khởi chạy kể cả khi không có stream ban đầu)
+        // 2. Khởi tạo PeerJS (Luôn khởi chạy kể cả khi chưa xin quyền thiết bị thực tế)
         peer = new Peer(user.id);
         peerRef.current = peer;
 
@@ -100,8 +118,8 @@ export default function CallRoom() {
         });
 
         peer.on('call', (call) => {
-          // Trả lời bằng stream nội bộ (nếu có)
-          call.answer(localStreamRef.current || undefined);
+          // Trả lời bằng stream hiện tại (chứa các transceiver ảo sẵn có để thay thế nóng sau này)
+          call.answer(localStreamRef.current);
           call.on('stream', (userVideoStream) => {
             setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
           });
@@ -231,9 +249,16 @@ export default function CallRoom() {
 
             if (peerRef.current) {
               Object.keys(peerRef.current.connections).forEach(peerId => {
-                const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
-                const sender = senders.find(s => s.track && s.track.kind === 'video');
-                if (sender) sender.replaceTrack(newTrack);
+                const connList = peerRef.current.connections[peerId];
+                if (connList) {
+                  connList.forEach(conn => {
+                    if (conn.peerConnection) {
+                      const senders = conn.peerConnection.getSenders();
+                      const sender = senders.find(s => s.track && s.track.kind === 'video');
+                      if (sender) sender.replaceTrack(newTrack);
+                    }
+                  });
+                }
               });
             }
             setVideoOn(true);
@@ -268,7 +293,30 @@ export default function CallRoom() {
     if (micOn) {
       if (localStreamRef.current) {
         const track = localStreamRef.current.getAudioTracks()[0];
-        if (track) track.stop(); // Turn off completely
+        if (track) track.stop(); // Tắt hoàn toàn phần cứng (mic tắt)
+        
+        // Thay thế bằng Silent Audio Track giả để giữ transceiver WebRTC sống
+        const emptyStream = createEmptyStream();
+        const silentAudioTrack = emptyStream.getAudioTracks()[0];
+        if (silentAudioTrack) {
+          localStreamRef.current.removeTrack(track);
+          localStreamRef.current.addTrack(silentAudioTrack);
+          
+          if (peerRef.current) {
+            Object.keys(peerRef.current.connections).forEach(peerId => {
+              const connList = peerRef.current.connections[peerId];
+              if (connList) {
+                connList.forEach(conn => {
+                  if (conn.peerConnection) {
+                    const senders = conn.peerConnection.getSenders();
+                    const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                    if (sender) sender.replaceTrack(silentAudioTrack);
+                  }
+                });
+              }
+            });
+          }
+        }
       }
       setMicOn(false);
     } else {
@@ -284,9 +332,16 @@ export default function CallRoom() {
 
         if (peerRef.current) {
           Object.keys(peerRef.current.connections).forEach(peerId => {
-            const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
-            const sender = senders.find(s => s.track && s.track.kind === 'audio' || (!s.track && s.track?.kind === 'audio') || (s.track?.kind === 'audio'));
-            if (sender) sender.replaceTrack(newTrack);
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                  if (sender) sender.replaceTrack(newTrack);
+                }
+              });
+            }
           });
         }
         setMicOn(true);
@@ -300,7 +355,30 @@ export default function CallRoom() {
     if (videoOn) {
       if (localStreamRef.current) {
         const track = localStreamRef.current.getVideoTracks()[0];
-        if (track) track.stop(); // Turn off completely (light goes off)
+        if (track) track.stop(); // Tắt hoàn toàn camera (đèn cam tắt)
+        
+        // Thay thế bằng Black Video Track giả để giữ transceiver WebRTC sống
+        const emptyStream = createEmptyStream();
+        const blackVideoTrack = emptyStream.getVideoTracks()[0];
+        if (blackVideoTrack) {
+          localStreamRef.current.removeTrack(track);
+          localStreamRef.current.addTrack(blackVideoTrack);
+          
+          if (peerRef.current) {
+            Object.keys(peerRef.current.connections).forEach(peerId => {
+              const connList = peerRef.current.connections[peerId];
+              if (connList) {
+                connList.forEach(conn => {
+                  if (conn.peerConnection) {
+                    const senders = conn.peerConnection.getSenders();
+                    const sender = senders.find(s => s.track && s.track.kind === 'video');
+                    if (sender) sender.replaceTrack(blackVideoTrack);
+                  }
+                });
+              }
+            });
+          }
+        }
       }
       setVideoOn(false);
     } else {
@@ -316,9 +394,16 @@ export default function CallRoom() {
 
         if (peerRef.current) {
           Object.keys(peerRef.current.connections).forEach(peerId => {
-            const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
-            const sender = senders.find(s => s.track && s.track.kind === 'video' || (!s.track && s.track?.kind === 'video') || (s.track?.kind === 'video'));
-            if (sender) sender.replaceTrack(newTrack);
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'video');
+                  if (sender) sender.replaceTrack(newTrack);
+                }
+              });
+            }
           });
         }
         setVideoOn(true);
@@ -342,11 +427,20 @@ export default function CallRoom() {
         videoTrack.enabled = videoOn;
         setIsScreenSharing(false);
         
-        Object.keys(peerRef.current.connections).forEach(peerId => {
-          const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
-          const sender = senders.find(s => s.track.kind === 'video');
-          if (sender) sender.replaceTrack(videoTrack);
-        });
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'video');
+                  if (sender) sender.replaceTrack(videoTrack);
+                }
+              });
+            }
+          });
+        }
       } else {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStream.getVideoTracks()[0];
@@ -360,11 +454,20 @@ export default function CallRoom() {
 
         screenTrack.onended = () => { toggleScreenShare(); };
 
-        Object.keys(peerRef.current.connections).forEach(peerId => {
-          const senders = peerRef.current.connections[peerId][0].peerConnection.getSenders();
-          const sender = senders.find(s => s.track.kind === 'video');
-          if (sender) sender.replaceTrack(screenTrack);
-        });
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'video');
+                  if (sender) sender.replaceTrack(screenTrack);
+                }
+              });
+            }
+          });
+        }
       }
     } catch (err) {
       console.error('Screen sharing error:', err);
