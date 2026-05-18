@@ -34,6 +34,7 @@ const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
       muted={isMuted || isLocal} // Luôn tắt tiếng video của chính mình để tránh dội âm (Echo)
       className={`w-full h-full object-contain bg-black/80 ${isLocal ? 'scale-x-[-1]' : ''}`} // Thay object-cover thành object-contain để không bị cắt xén
     />
+  );
 };
 
 // Component phát âm thanh của người dùng khác độc lập với Camera
