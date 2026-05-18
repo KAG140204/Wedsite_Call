@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check } from 'lucide-react';
+import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check, Settings, Volume2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
 import { API_BASE_URL, WS_BASE_URL } from '../config';
 
 // Component hiển thị Video Stream
-const VideoPlayer = ({ stream, isMuted, isLocal }) => {
+const VideoPlayer = ({ stream, isMuted, isLocal, sinkId }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -14,6 +14,13 @@ const VideoPlayer = ({ stream, isMuted, isLocal }) => {
       videoRef.current.srcObject = stream;
     }
   }, [stream]);
+
+  useEffect(() => {
+    if (videoRef.current && sinkId && videoRef.current.setSinkId) {
+      videoRef.current.setSinkId(sinkId)
+        .catch(err => console.error("Error setting sink ID:", err));
+    }
+  }, [sinkId]);
 
   return (
     <video
@@ -79,6 +86,118 @@ export default function CallRoom() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
+
+  // --- DEVICE SETTINGS STATE ---
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [audioInputs, setAudioInputs] = useState([]);
+  const [videoInputs, setVideoInputs] = useState([]);
+  const [audioOutputs, setAudioOutputs] = useState([]);
+  
+  const [selectedMic, setSelectedMic] = useState('');
+  const [selectedCam, setSelectedCam] = useState('');
+  const [selectedSpeaker, setSelectedSpeaker] = useState('');
+
+  const loadDevices = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      const speakers = devices.filter(d => d.kind === 'audiooutput');
+      
+      setAudioInputs(mics);
+      setVideoInputs(cams);
+      setAudioOutputs(speakers);
+
+      if (mics.length > 0 && !selectedMic) setSelectedMic(mics[0].deviceId);
+      if (cams.length > 0 && !selectedCam) setSelectedCam(cams[0].deviceId);
+      if (speakers.length > 0 && !selectedSpeaker) setSelectedSpeaker(speakers[0].deviceId);
+    } catch (err) {
+      console.error("Lỗi liệt kê thiết bị:", err);
+    }
+  };
+
+  const openSettings = async () => {
+    setIsSettingsOpen(true);
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasLabels = devices.some(d => d.label !== '');
+      if (!hasLabels) {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        tempStream.getTracks().forEach(t => t.stop());
+      }
+    } catch (e) {
+      console.warn("Chưa cấp quyền thiết bị.");
+    }
+    await loadDevices();
+  };
+
+  const handleMicChange = async (deviceId) => {
+    setSelectedMic(deviceId);
+    if (micOn) {
+      try {
+        const constraints = { audio: { deviceId: { exact: deviceId } } };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const newTrack = stream.getAudioTracks()[0];
+        
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getAudioTracks()[0];
+          if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+          localStreamRef.current.addTrack(newTrack);
+        }
+        
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                  if (sender) sender.replaceTrack(newTrack);
+                }
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Lỗi đổi Mic:", err);
+      }
+    }
+  };
+
+  const handleCamChange = async (deviceId) => {
+    setSelectedCam(deviceId);
+    if (videoOn) {
+      try {
+        const constraints = { video: { deviceId: { exact: deviceId } } };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const newTrack = stream.getVideoTracks()[0];
+        
+        if (localStreamRef.current) {
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+          localStreamRef.current.addTrack(newTrack);
+        }
+        
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'video');
+                  if (sender) sender.replaceTrack(newTrack);
+                }
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Lỗi đổi Camera:", err);
+      }
+    }
+  };
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -326,7 +445,8 @@ export default function CallRoom() {
       setMicOn(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const constraints = selectedMic ? { audio: { deviceId: { exact: selectedMic } } } : { audio: true };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTrack = stream.getAudioTracks()[0];
         
         if (localStreamRef.current) {
@@ -387,7 +507,8 @@ export default function CallRoom() {
       setVideoOn(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const constraints = selectedCam ? { video: { deviceId: { exact: selectedCam } } } : { video: true };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTrack = stream.getVideoTracks()[0];
         
         if (localStreamRef.current) {
@@ -577,7 +698,7 @@ export default function CallRoom() {
             {/* Self Video */}
             <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
               {localStreamRef.current && videoOn ? (
-                <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} />
+                <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} sinkId={selectedSpeaker} />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
@@ -595,7 +716,7 @@ export default function CallRoom() {
             {participants.map((p) => (
               <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
                 {remoteStreams[p.id] ? (
-                  <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} />
+                  <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                     <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
@@ -710,12 +831,108 @@ export default function CallRoom() {
           )}
         </button>
 
+        {/* Cài đặt thiết bị (Settings Button) */}
+        <button 
+          onClick={openSettings} 
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg glass-button hover:bg-gray-700 text-gray-300 hover:text-white"
+          title="Cài đặt thiết bị"
+        >
+          <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+        </button>
+
         <div className="w-px h-8 bg-gray-700 mx-1 sm:mx-2"></div>
 
         <button onClick={handleLeave} className="px-4 sm:px-6 h-10 sm:h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.4)]">
           <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden sm:inline">Rời phòng</span>
         </button>
       </footer>
+
+      {/* Settings Modal (Cấu hình thiết bị) */}
+      {isSettingsOpen && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-gray-900/90 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
+              <Settings className="w-5 h-5 text-purple-400" /> Cài đặt thiết bị
+            </h3>
+            
+            <div className="space-y-5">
+              {/* Chọn Microphone */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5" /> Microphone (Đầu vào)
+                </label>
+                <select 
+                  value={selectedMic} 
+                  onChange={e => handleMicChange(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {audioInputs.length === 0 ? (
+                    <option value="">Không tìm thấy thiết bị</option>
+                  ) : (
+                    audioInputs.map(d => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone (${d.deviceId.slice(0, 5)})`}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Chọn Camera */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <VideoIcon className="w-3.5 h-3.5" /> Camera (Hình ảnh)
+                </label>
+                <select 
+                  value={selectedCam} 
+                  onChange={e => handleCamChange(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {videoInputs.length === 0 ? (
+                    <option value="">Không tìm thấy thiết bị</option>
+                  ) : (
+                    videoInputs.map(d => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera (${d.deviceId.slice(0, 5)})`}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Chọn Loa / Output */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Volume2 className="w-3.5 h-3.5" /> Loa / Tai nghe (Đầu ra)
+                </label>
+                <select 
+                  value={selectedSpeaker} 
+                  onChange={e => setSelectedSpeaker(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  {audioOutputs.length === 0 ? (
+                    <option value="">Thiết bị mặc định (Hệ thống tự chọn)</option>
+                  ) : (
+                    audioOutputs.map(d => (
+                      <option key={d.deviceId} value={d.deviceId}>{d.label || `Loa (${d.deviceId.slice(0, 5)})`}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => setIsSettingsOpen(false)}
+              className="mt-8 w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-2 rounded-lg transition-colors text-sm"
+            >
+              Hoàn tất
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
