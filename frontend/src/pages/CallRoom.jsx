@@ -118,6 +118,59 @@ export default function CallRoom() {
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
 
+  // --- DRAGGABLE TOOLBAR STATE & LOGIC ---
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ startX: 0, startY: 0 });
+
+  const handleDragStart = (e) => {
+    // Nếu click trúng button thì ưu tiên xử lý click thông thường, không kéo
+    if (e.target.closest('button')) return;
+    
+    setIsDragging(true);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    dragStartRef.current = {
+      startX: clientX - menuPos.x,
+      startY: clientY - menuPos.y
+    };
+  };
+
+  const handleDragMove = (e) => {
+    if (!isDragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - dragStartRef.current.startX;
+    const newY = clientY - dragStartRef.current.startY;
+    
+    setMenuPos({ x: newX, y: newY });
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      const onMove = (e) => handleDragMove(e);
+      const onEnd = () => handleDragEnd();
+      
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onEnd);
+      
+      return () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onEnd);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onEnd);
+      };
+    }
+  }, [isDragging]);
+
   // --- DEVICE SETTINGS STATE ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [audioInputs, setAudioInputs] = useState([]);
@@ -1076,48 +1129,63 @@ export default function CallRoom() {
         )}
       </div>
 
-      <footer className="h-20 sm:h-24 flex items-center justify-center px-4 sm:px-6 pb-3 sm:pb-4 pt-2 gap-2 sm:gap-4 glass-panel border-t border-gray-800 z-10 shrink-0">
-        <button onClick={toggleMic} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${micOn ? 'glass-button hover:bg-gray-700' : 'bg-red-500 text-white hover:bg-red-600'}`}>
-          {micOn ? <Mic className="w-5 h-5 sm:w-6 sm:h-6" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+      <footer 
+        onMouseDown={handleDragStart}
+        onTouchStart={handleDragStart}
+        style={{
+          transform: `translate(calc(-50% + ${menuPos.x}px), ${menuPos.y}px)`,
+          cursor: isDragging ? 'grabbing' : 'grab'
+        }}
+        className="fixed bottom-6 left-1/2 h-16 sm:h-20 flex items-center justify-center px-5 sm:px-6 rounded-full bg-gray-950/85 border border-gray-800/80 shadow-2xl backdrop-blur-xl z-40 gap-2.5 sm:gap-4 select-none touch-none transition-shadow duration-300 hover:shadow-purple-500/10 hover:border-purple-500/20 active:shadow-purple-500/20 active:border-purple-500/30"
+      >
+        {/* Chỉ báo cầm kéo (Draggable Handle indicator) */}
+        <div className="flex flex-col gap-0.5 pr-2.5 cursor-grab active:cursor-grabbing select-none shrink-0 border-r border-gray-800 mr-0.5 opacity-40 hover:opacity-100 transition-opacity">
+          <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+          <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+          <div className="w-1 h-1 rounded-full bg-gray-400"></div>
+        </div>
+
+        <button onClick={toggleMic} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all shadow-md ${micOn ? 'glass-button hover:bg-gray-800' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+          {micOn ? <Mic className="w-4 h-4 sm:w-5 sm:h-5" /> : <MicOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
         
-        <button onClick={toggleVideo} className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${videoOn ? 'glass-button hover:bg-gray-700' : 'bg-red-500 text-white hover:bg-red-600'}`}>
-          {videoOn ? <VideoIcon className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+        <button onClick={toggleVideo} className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all shadow-md ${videoOn ? 'glass-button hover:bg-gray-800' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+          {videoOn ? <VideoIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
         
-        <button onClick={toggleScreenShare} className={`hidden sm:flex w-10 h-10 sm:w-12 sm:h-12 rounded-full items-center justify-center ml-2 sm:ml-4 transition-all shadow-lg ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-700'}`} title="Chia sẻ màn hình">
-          <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />
+        <button onClick={toggleScreenShare} className={`hidden sm:flex w-9 h-9 sm:w-11 sm:h-11 rounded-full items-center justify-center transition-all shadow-md ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-800'}`} title="Chia sẻ màn hình">
+          <MonitorUp className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
         </button>
         
-        <div className="w-px h-8 bg-gray-700 mx-1 sm:mx-2"></div>
+        <div className="w-px h-6 bg-gray-800 mx-0.5 sm:mx-1"></div>
         
         {/* Toggle Chat Button */}
         <button 
           onClick={() => { setIsChatOpen(!isChatOpen); setUnreadCount(0); }} 
-          className={`relative w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isChatOpen ? 'bg-blue-600 text-white' : 'glass-button hover:bg-gray-700'}`}
+          className={`relative w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all shadow-md ${isChatOpen ? 'bg-blue-600 text-white' : 'glass-button hover:bg-gray-800'}`}
           title="Trò chuyện"
         >
-          <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
+          <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
           {unreadCount > 0 && !isChatOpen && (
-            <span className="absolute top-0 right-0 transform translate-x-1 -translate-y-1 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full border-2 border-gray-900 animate-bounce">
+            <span className="absolute top-0 right-0 transform translate-x-1 -translate-y-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-gray-900 animate-bounce">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </button>
-
+ 
         {/* Cài đặt thiết bị (Settings Button) */}
         <button 
           onClick={openSettings} 
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all shadow-lg glass-button hover:bg-gray-700 text-gray-300 hover:text-white"
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all shadow-md glass-button hover:bg-gray-800 text-gray-300 hover:text-white"
           title="Cài đặt thiết bị"
         >
-          <Settings className="w-5 h-5 sm:w-6 sm:h-6" />
+          <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
         </button>
-
-        <div className="w-px h-8 bg-gray-700 mx-1 sm:mx-2"></div>
-
-        <button onClick={handleLeave} className="px-4 sm:px-6 h-10 sm:h-12 rounded-full bg-red-600 hover:bg-red-500 text-white font-medium flex items-center gap-2 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-          <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" /> <span className="hidden sm:inline">Rời phòng</span>
+ 
+        <div className="w-px h-6 bg-gray-800 mx-0.5 sm:mx-1"></div>
+ 
+        <button onClick={handleLeave} className="px-3 sm:px-5 h-9 sm:h-11 rounded-full bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-colors shadow-[0_0_15px_rgba(220,38,38,0.3)]">
+          <PhoneOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Rời phòng</span>
         </button>
       </footer>
 
