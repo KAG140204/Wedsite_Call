@@ -103,6 +103,66 @@ export default function CallRoom() {
   const [selectedCam, setSelectedCam] = useState('');
   const [selectedSpeaker, setSelectedSpeaker] = useState('');
 
+  // Trạng thái nhảy nhịp âm lượng mic trong Settings Modal
+  const [micLevel, setMicLevel] = useState(0);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const micStreamRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  const startMicVisualizer = (stream) => {
+    stopMicVisualizer();
+    if (!stream) return;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioContextClass();
+      audioContextRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const draw = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let total = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          total += dataArray[i];
+        }
+        const average = total / bufferLength;
+        
+        // Chuẩn hóa mức volume sang tỷ lệ 0-100%, có nhân hệ số để mức nhảy nhạy bén và rõ rệt
+        const level = Math.min(100, Math.round((average / 110) * 100));
+        setMicLevel(level);
+
+        animationFrameRef.current = requestAnimationFrame(draw);
+      };
+
+      draw();
+    } catch (err) {
+      console.error("Lỗi khởi tạo visualizer mic:", err);
+    }
+  };
+
+  const stopMicVisualizer = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(console.error);
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+    setMicLevel(0);
+  };
+
   const loadDevices = async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -124,6 +184,7 @@ export default function CallRoom() {
 
   const openSettings = async () => {
     setIsSettingsOpen(true);
+    let targetMicId = selectedMic;
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const hasLabels = devices.some(d => d.label !== '');
@@ -134,11 +195,67 @@ export default function CallRoom() {
     } catch (e) {
       console.warn("Chưa cấp quyền thiết bị.");
     }
-    await loadDevices();
+    
+    // Tải và đồng bộ thiết bị
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      const speakers = devices.filter(d => d.kind === 'audiooutput');
+      
+      setAudioInputs(mics);
+      setVideoInputs(cams);
+      setAudioOutputs(speakers);
+
+      if (mics.length > 0) {
+        if (!selectedMic) {
+          setSelectedMic(mics[0].deviceId);
+          targetMicId = mics[0].deviceId;
+        }
+      }
+      if (cams.length > 0 && !selectedCam) setSelectedCam(cams[0].deviceId);
+      if (speakers.length > 0 && !selectedSpeaker) setSelectedSpeaker(speakers[0].deviceId);
+    } catch (err) {
+      console.error("Lỗi nạp thiết bị:", err);
+    }
+
+    // Khởi chạy luồng test mic nhảy nhịp cục bộ trong modal
+    try {
+      const testConstraints = targetMicId ? { audio: { deviceId: { exact: targetMicId } } } : { audio: true };
+      const tempStream = await navigator.mediaDevices.getUserMedia(testConstraints);
+      micStreamRef.current = tempStream;
+      startMicVisualizer(tempStream);
+    } catch (err) {
+      console.warn("Không thể kích hoạt test mic trong cài đặt:", err);
+    }
+  };
+
+  const closeSettings = () => {
+    setIsSettingsOpen(false);
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+    }
+    stopMicVisualizer();
   };
 
   const handleMicChange = async (deviceId) => {
     setSelectedMic(deviceId);
+    
+    // 1. Cập nhật luồng test mic cục bộ trong modal
+    try {
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach(t => t.stop());
+      }
+      const testConstraints = { audio: { deviceId: { exact: deviceId } } };
+      const tempStream = await navigator.mediaDevices.getUserMedia(testConstraints);
+      micStreamRef.current = tempStream;
+      startMicVisualizer(tempStream);
+    } catch (err) {
+      console.error("Lỗi thay đổi thiết bị test mic:", err);
+    }
+
+    // 2. Nếu mic đang bật trong cuộc gọi, thay thế nóng WebRTC track
     if (micOn) {
       try {
         const constraints = { audio: { deviceId: { exact: deviceId } } };
@@ -166,7 +283,7 @@ export default function CallRoom() {
           });
         }
       } catch (err) {
-        console.error("Lỗi đổi Mic:", err);
+        console.error("Lỗi đổi Mic cuộc gọi:", err);
       }
     }
   };
@@ -910,7 +1027,7 @@ export default function CallRoom() {
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-gray-900/90 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
             <button 
-              onClick={() => setIsSettingsOpen(false)}
+              onClick={closeSettings}
               className="absolute top-4 right-4 p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
             >
               <X className="w-5 h-5" />
@@ -939,6 +1056,20 @@ export default function CallRoom() {
                     ))
                   )}
                 </select>
+
+                {/* Thanh hiện nhịp Mic nhảy nhót real-time */}
+                <div className="mt-2.5 flex items-center gap-2 bg-gray-950/40 p-2 rounded-lg border border-gray-800/50">
+                  <div className="text-[11px] text-gray-400 font-medium whitespace-nowrap flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping"></div> Tín hiệu Mic:
+                  </div>
+                  <div className="flex-1 h-2 bg-gray-950 rounded-full overflow-hidden border border-gray-800/80 flex items-center p-[1px]">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 via-green-400 to-green-500 rounded-full transition-all duration-75 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                      style={{ width: `${micLevel}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] font-mono text-emerald-400 w-6 text-right">{micLevel}%</div>
+                </div>
               </div>
 
               {/* Chọn Camera */}
