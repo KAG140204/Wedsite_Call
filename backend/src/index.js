@@ -7,12 +7,17 @@ const app = new Hono()
 // Apply CORS to all routes
 app.use('/*', cors({
   origin: (origin) => {
-    // Chỉ cho phép localhost (dev) và kaysor-call.pages.dev (chính thức) gọi API
-    if (!origin) return 'https://kaysor-call.pages.dev';
-    if (origin.includes('localhost') || origin.includes('kaysor-call.pages.dev')) {
+    // Chỉ cho phép localhost (dev), kaysor-call.pages.dev và tên miền riêng kaysor.id.vn gọi API
+    if (!origin) return 'https://kaysor.id.vn';
+    if (
+      origin.includes('localhost') || 
+      origin.includes('kaysor-call.pages.dev') || 
+      origin.includes('kaysor.id.vn') ||
+      origin.includes('wedsite-call.pages.dev')
+    ) {
       return origin;
     }
-    return 'https://kaysor-call.pages.dev';
+    return 'https://kaysor.id.vn';
   },
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization']
