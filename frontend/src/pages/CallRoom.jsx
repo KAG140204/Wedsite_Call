@@ -72,11 +72,25 @@ export default function CallRoom() {
 
     // 1. Khởi tạo Local Stream (Camera & Mic)
     const initMedia = async () => {
+      let stream = null;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localStreamRef.current = stream;
         
-        // 2. Khởi tạo PeerJS
+        // Mặc định tắt hoàn toàn phần cứng (mic/cam) khi mới vào phòng để bảo mật
+        stream.getAudioTracks().forEach(track => track.stop());
+        stream.getVideoTracks().forEach(track => track.stop());
+      } catch (err) {
+        console.warn('Không thể truy cập Camera/Microphone lúc khởi tạo:', err);
+        setError('Không thể truy cập Camera/Microphone. Bạn vẫn có thể tham gia phòng và bật lại thiết bị sau.');
+        // Tự động xóa thông báo lỗi sau 5 giây để không che màn hình
+        setTimeout(() => {
+          if (isMounted) setError('');
+        }, 5000);
+      }
+      
+      try {
+        // 2. Khởi tạo PeerJS (Luôn khởi chạy kể cả khi không có stream ban đầu)
         peer = new Peer(user.id);
         peerRef.current = peer;
 
@@ -86,17 +100,15 @@ export default function CallRoom() {
         });
 
         peer.on('call', (call) => {
-          call.answer(stream);
+          // Trả lời bằng stream nội bộ (nếu có)
+          call.answer(localStreamRef.current || undefined);
           call.on('stream', (userVideoStream) => {
             setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
           });
         });
-
-        // Mặc định tắt hoàn toàn phần cứng (mic/cam) khi mới vào phòng
-        stream.getAudioTracks().forEach(track => track.stop());
-        stream.getVideoTracks().forEach(track => track.stop());
-      } catch (err) {
-        setError('Không thể truy cập Camera/Microphone. Vui lòng cấp quyền.');
+      } catch (peerErr) {
+        console.error('Lỗi khởi tạo PeerJS:', peerErr);
+        setError('Lỗi kết nối mạng ngang hàng.');
       }
     };
 
