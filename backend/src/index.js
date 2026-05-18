@@ -582,6 +582,14 @@ export class RoomSession {
           if (this.messages.length > 100) this.messages.shift();
           this.broadcast({ type: 'chat_message', message: msgObj });
         }
+        else if (data.type === 'media_state') {
+          this.broadcast({
+            type: 'media_state',
+            userId: userData.id,
+            micOn: data.micOn,
+            videoOn: data.videoOn
+          });
+        }
       } catch (err) {
         console.error(err);
       }

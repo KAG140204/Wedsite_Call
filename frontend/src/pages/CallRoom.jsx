@@ -80,6 +80,12 @@ export default function CallRoom() {
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
+  // --- PARTICIPANTS MEDIA STATES ---
+  const [participantsMedia, setParticipantsMedia] = useState({}); // { [userId]: { micOn, videoOn } }
+
+  const micOnRef = useRef(false);
+  const videoOnRef = useRef(false);
+
   // --- CHAT STATE ---
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -199,6 +205,16 @@ export default function CallRoom() {
     }
   };
 
+  const broadcastMediaState = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'media_state',
+        micOn: micOnRef.current,
+        videoOn: videoOnRef.current
+      }));
+    }
+  };
+
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   
@@ -280,6 +296,15 @@ export default function CallRoom() {
             // Luôn cập nhật danh sách người tham gia (để người mới vào lấy được danh sách những người đang có mặt)
             setParticipants(data.participants.filter(p => p.id !== user.id));
             
+            // Broadcast trạng thái mic/cam hiện tại của mình để người mới biết
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'media_state',
+                micOn: micOnRef.current,
+                videoOn: videoOnRef.current
+              }));
+            }
+
             // Nếu người mới vào KHÔNG PHẢI LÀ MÌNH, mình sẽ chủ động gọi cho họ
             if (data.user.id !== user.id) {
               if (localStreamRef.current && peerRef.current) {
@@ -297,6 +322,11 @@ export default function CallRoom() {
               delete newStreams[data.user.id];
               return newStreams;
             });
+            setParticipantsMedia(prev => {
+              const newMedia = { ...prev };
+              delete newMedia[data.user.id];
+              return newMedia;
+            });
             break;
           case 'room_renamed':
             setRoomName(data.roomName);
@@ -304,6 +334,12 @@ export default function CallRoom() {
           case 'kicked':
             alert('Bạn đã bị chủ phòng mời ra khỏi cuộc gọi!');
             handleLeave();
+            break;
+          case 'media_state':
+            setParticipantsMedia(prev => ({
+              ...prev,
+              [data.userId]: { micOn: data.micOn, videoOn: data.videoOn }
+            }));
             break;
           // --- CHAT EVENTS ---
           case 'chat_history':
@@ -357,6 +393,8 @@ export default function CallRoom() {
             if (track) track.stop();
           }
           setVideoOn(false);
+          videoOnRef.current = false;
+          broadcastMediaState();
         }
       } else {
         // Người dùng quay lại trình duyệt (Foreground)
@@ -387,6 +425,8 @@ export default function CallRoom() {
               });
             }
             setVideoOn(true);
+            videoOnRef.current = true;
+            broadcastMediaState();
           } catch (err) {
             console.error("Lỗi khi khôi phục Camera từ background", err);
           }
@@ -443,6 +483,8 @@ export default function CallRoom() {
         }
       }
       setMicOn(false);
+      micOnRef.current = false;
+      broadcastMediaState();
     } else {
       try {
         const constraints = selectedMic ? { audio: { deviceId: { exact: selectedMic } } } : { audio: true };
@@ -470,6 +512,8 @@ export default function CallRoom() {
           });
         }
         setMicOn(true);
+        micOnRef.current = true;
+        broadcastMediaState();
       } catch (err) {
         console.error("Error turning on mic", err);
       }
@@ -505,6 +549,8 @@ export default function CallRoom() {
         }
       }
       setVideoOn(false);
+      videoOnRef.current = false;
+      broadcastMediaState();
     } else {
       try {
         const constraints = selectedCam ? { video: { deviceId: { exact: selectedCam } } } : { video: true };
@@ -532,6 +578,8 @@ export default function CallRoom() {
           });
         }
         setVideoOn(true);
+        videoOnRef.current = true;
+        broadcastMediaState();
       } catch (err) {
         console.error("Error turning on video", err);
       }
@@ -713,34 +761,38 @@ export default function CallRoom() {
             </div>
 
             {/* Other Participants */}
-            {participants.map((p) => (
-              <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
-                {remoteStreams[p.id] ? (
-                  <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
-                      {p.name.charAt(0).toUpperCase()}
+            {participants.map((p) => {
+              const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
+              return (
+                <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
+                  {remoteStreams[p.id] && pMedia.videoOn ? (
+                    <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
                     </div>
+                  )}
+                  <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
+                    {p.name} {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
+                    {!pMedia.micOn && <MicOff className="w-3 h-3 text-red-400 ml-1" />}
                   </div>
-                )}
-                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-                  {p.name} {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
+                  
+                  {isHost && (
+                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                      <button 
+                        onClick={() => handleKick(p.id)}
+                        className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg backdrop-blur-md flex items-center justify-center shadow-lg transition-transform hover:scale-110"
+                        title="Đuổi người này khỏi phòng"
+                      >
+                        <UserMinus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                
-                {isHost && (
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button 
-                      onClick={() => handleKick(p.id)}
-                      className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg backdrop-blur-md flex items-center justify-center shadow-lg transition-transform hover:scale-110"
-                      title="Đuổi người này khỏi phòng"
-                    >
-                      <UserMinus className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
 
           </div>
         </main>
