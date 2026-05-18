@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Gamepad2, Home, User, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -10,12 +10,81 @@ export default function GooeyProfileMenu() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // --- DRAGGABLE PROFILE MENU STATE & LOGIC ---
+  const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ startX: 0, startY: 0 });
+  const dragStartCoords = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+
+  const handleDragStart = (e) => {
+    // Chỉ kích hoạt kéo khi click trực tiếp vào nút menu chính, không phải các menu-item đã nở ra
+    if (e.target.closest('.menu-item')) return;
+    
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    dragStartCoords.current = { x: clientX, y: clientY };
+    dragStartRef.current = {
+      startX: clientX - menuPos.x,
+      startY: clientY - menuPos.y
+    };
+  };
+
+  useEffect(() => {
+    const handleDragMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - dragStartRef.current.startX;
+      const newY = clientY - dragStartRef.current.startY;
+      
+      setMenuPos({ x: newX, y: newY });
+    };
+
+    const handleDragEnd = (e) => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      setIsDragging(false);
+
+      const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+      const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+      const dx = clientX - dragStartCoords.current.x;
+      const dy = clientY - dragStartCoords.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Nếu khoảng cách di chuyển nhỏ (< 5px), coi như click nhẹ để đóng/mở menu
+      if (distance < 5) {
+        setIsOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('mousemove', handleDragMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [menuPos]);
+
   // Không hiển thị Menu ở trang Login hoặc Register hoặc nếu chưa đăng nhập
   if (!user || ['/login', '/register'].includes(location.pathname)) {
     return null;
   }
-
-  const handleToggle = () => setIsOpen(!isOpen);
 
   const handleNavigate = (path) => {
     setIsOpen(false);
@@ -29,7 +98,13 @@ export default function GooeyProfileMenu() {
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-50">
+    <div 
+      style={{
+        transform: `translate(${menuPos.x}px, ${menuPos.y}px)`,
+        cursor: isDragging ? 'grabbing' : 'grab'
+      }}
+      className="fixed bottom-8 right-8 z-50 select-none touch-none"
+    >
       <nav className="gooey-menu text-white">
         <input 
           type="checkbox" 
@@ -37,10 +112,14 @@ export default function GooeyProfileMenu() {
           name="menu-open" 
           id="menu-open" 
           checked={isOpen}
-          onChange={handleToggle}
+          readOnly
         />
         
-        <label className="menu-open-button bg-purple-600 hover:bg-purple-500 shadow-xl shadow-purple-500/40" htmlFor="menu-open">
+        <label 
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          className="menu-open-button bg-purple-600 hover:bg-purple-500 shadow-xl shadow-purple-500/40"
+        >
           <span className="lines line-1"></span>
           <span className="lines line-2"></span>
           <span className="lines line-3"></span>

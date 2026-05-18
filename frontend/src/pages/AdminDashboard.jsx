@@ -94,6 +94,72 @@ export default function AdminDashboard() {
   });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
 
+  // --- DRAGGABLE ADMIN MENU STATE & LOGIC ---
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [adminMenuPos, setAdminMenuPos] = useState({ x: 0, y: 0 });
+  const [isAdminDragging, setIsAdminDragging] = useState(false);
+  const adminDragStartRef = useRef({ startX: 0, startY: 0 });
+  const adminDragStartCoords = useRef({ x: 0, y: 0 });
+  const isAdminDraggingRef = useRef(false);
+
+  const handleAdminDragStart = (e) => {
+    if (e.target.closest('.admin-menu-item')) return;
+    
+    isAdminDraggingRef.current = true;
+    setIsAdminDragging(true);
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    adminDragStartCoords.current = { x: clientX, y: clientY };
+    adminDragStartRef.current = {
+      startX: clientX - adminMenuPos.x,
+      startY: clientY - adminMenuPos.y
+    };
+  };
+
+  useEffect(() => {
+    const handleAdminDragMove = (e) => {
+      if (!isAdminDraggingRef.current) return;
+      if (e.cancelable) e.preventDefault();
+      
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - adminDragStartRef.current.startX;
+      const newY = clientY - adminDragStartRef.current.startY;
+      setAdminMenuPos({ x: newX, y: newY });
+    };
+
+    const handleAdminDragEnd = (e) => {
+      if (!isAdminDraggingRef.current) return;
+      isAdminDraggingRef.current = false;
+      setIsAdminDragging(false);
+
+      const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+      const clientY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+      const dx = clientX - adminDragStartCoords.current.x;
+      const dy = clientY - adminDragStartCoords.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < 5) {
+        setIsAdminOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('mousemove', handleAdminDragMove);
+    window.addEventListener('mouseup', handleAdminDragEnd);
+    window.addEventListener('touchmove', handleAdminDragMove, { passive: false });
+    window.addEventListener('touchend', handleAdminDragEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleAdminDragMove);
+      window.removeEventListener('mouseup', handleAdminDragEnd);
+      window.removeEventListener('touchmove', handleAdminDragMove);
+      window.removeEventListener('touchend', handleAdminDragEnd);
+    };
+  }, [adminMenuPos]);
+
   useEffect(() => {
     if (!user || user.role !== 'admin') {
       navigate('/login');
@@ -255,33 +321,45 @@ export default function AdminDashboard() {
         </div>
 
         {/* ====== ADMIN GOOEY MENU ====== */}
-        <div className="fixed bottom-8 left-8 z-50">
+        <div 
+          style={{
+            transform: `translate(${adminMenuPos.x}px, ${adminMenuPos.y}px)`,
+            cursor: isAdminDragging ? 'grabbing' : 'grab'
+          }}
+          className="fixed bottom-8 left-8 z-50 select-none touch-none"
+        >
           <nav className="admin-gooey-menu text-white">
             <input 
               type="checkbox" 
               className="admin-menu-open" 
               name="admin-menu-open" 
               id="admin-menu-open" 
+              checked={isAdminOpen}
+              readOnly
             />
-            <label className="admin-menu-open-button bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/40" htmlFor="admin-menu-open">
+            <label 
+              onMouseDown={handleAdminDragStart}
+              onTouchStart={handleAdminDragStart}
+              className="admin-menu-open-button bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/40"
+            >
               <span className="admin-lines admin-line-1"></span>
               <span className="admin-lines admin-line-2"></span>
               <span className="admin-lines admin-line-3"></span>
             </label>
 
-            <button onClick={() => { setActiveTab('users'); setSearchQuery(''); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-blue-500 hover:bg-blue-400 ${activeTab === 'users' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Tài Khoản">
+            <button onClick={() => { setActiveTab('users'); setSearchQuery(''); setIsAdminOpen(false); }} className={`admin-menu-item bg-blue-500 hover:bg-blue-400 ${activeTab === 'users' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Tài Khoản">
               <Users className="w-5 h-5 text-white" />
             </button>
             
-            <button onClick={() => { setActiveTab('rooms'); setSearchQuery(''); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-purple-500 hover:bg-purple-400 ${activeTab === 'rooms' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Danh sách Phòng">
+            <button onClick={() => { setActiveTab('rooms'); setSearchQuery(''); setIsAdminOpen(false); }} className={`admin-menu-item bg-purple-500 hover:bg-purple-400 ${activeTab === 'rooms' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Danh sách Phòng">
               <Database className="w-5 h-5 text-white" />
             </button>
 
-            <button onClick={() => { setActiveTab('logs'); setSearchQuery(''); setLogFilter('ALL'); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-pink-500 hover:bg-pink-400 ${activeTab === 'logs' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Nhật ký">
+            <button onClick={() => { setActiveTab('logs'); setSearchQuery(''); setLogFilter('ALL'); setIsAdminOpen(false); }} className={`admin-menu-item bg-pink-500 hover:bg-pink-400 ${activeTab === 'logs' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Nhật ký">
               <Activity className="w-5 h-5 text-white" />
             </button>
 
-            <button onClick={() => { setActiveTab('reports'); document.getElementById('admin-menu-open').checked = false; }} className={`admin-menu-item bg-orange-500 hover:bg-orange-400 ${activeTab === 'reports' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Báo Cáo">
+            <button onClick={() => { setActiveTab('reports'); setIsAdminOpen(false); }} className={`admin-menu-item bg-orange-500 hover:bg-orange-400 ${activeTab === 'reports' ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-950' : ''}`} title="Báo Cáo">
               <FileText className="w-5 h-5 text-white" />
             </button>
           </nav>
