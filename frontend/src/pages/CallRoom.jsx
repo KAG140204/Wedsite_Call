@@ -58,7 +58,22 @@ const RemoteAudio = ({ stream, sinkId }) => {
     }
   }, [sinkId]);
 
-  return <audio ref={audioRef} autoPlay playsInline className="hidden" />;
+  return (
+    <audio 
+      ref={audioRef} 
+      autoPlay 
+      playsInline 
+      style={{
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        opacity: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        clip: 'rect(0, 0, 0, 0)'
+      }} 
+    />
+  );
 };
 
 // Tạo một stream ảo (Silent Audio và Black Video) để làm nền tảng WebRTC khởi tạo không cần xin quyền ngay
