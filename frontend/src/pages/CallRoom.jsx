@@ -6,14 +6,18 @@ import Peer from 'peerjs';
 import { API_BASE_URL, WS_BASE_URL } from '../config';
 
 // Component hiển thị Video Stream
-const VideoPlayer = ({ stream, isMuted, isLocal, sinkId }) => {
+const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      
+      // Kích hoạt phát lại chủ động và giải quyết triệt để lỗi Autoplay/Suspended Decoder của trình duyệt di động & PC
+      videoRef.current.play()
+        .catch(err => console.warn("Autoplay blocked or interrupted:", err));
     }
-  }, [stream]);
+  }, [stream, micOn, videoOn]); // Khi đối phương bật/tắt thiết bị, nạp lại stream để ép trình duyệt tái kích hoạt bộ giải mã âm thanh
 
   useEffect(() => {
     if (videoRef.current && sinkId && videoRef.current.setSinkId) {
@@ -276,7 +280,15 @@ export default function CallRoom() {
                 if (conn.peerConnection) {
                   const senders = conn.peerConnection.getSenders();
                   const sender = senders.find(s => s.track && s.track.kind === 'audio');
-                  if (sender) sender.replaceTrack(newTrack);
+                  if (sender) {
+                    sender.replaceTrack(newTrack);
+                  } else {
+                    try {
+                      conn.peerConnection.addTrack(newTrack, localStreamRef.current);
+                    } catch (trackErr) {
+                      console.warn("Lỗi addTrack dự phòng khi đổi Mic:", trackErr);
+                    }
+                  }
                 }
               });
             }
@@ -622,7 +634,15 @@ export default function CallRoom() {
                 if (conn.peerConnection) {
                   const senders = conn.peerConnection.getSenders();
                   const sender = senders.find(s => s.track && s.track.kind === 'audio');
-                  if (sender) sender.replaceTrack(newTrack);
+                  if (sender) {
+                    sender.replaceTrack(newTrack);
+                  } else {
+                    try {
+                      conn.peerConnection.addTrack(newTrack, localStreamRef.current);
+                    } catch (trackErr) {
+                      console.warn("Lỗi addTrack dự phòng khi bật Mic:", trackErr);
+                    }
+                  }
                 }
               });
             }
@@ -688,7 +708,15 @@ export default function CallRoom() {
                 if (conn.peerConnection) {
                   const senders = conn.peerConnection.getSenders();
                   const sender = senders.find(s => s.track && s.track.kind === 'video');
-                  if (sender) sender.replaceTrack(newTrack);
+                  if (sender) {
+                    sender.replaceTrack(newTrack);
+                  } else {
+                    try {
+                      conn.peerConnection.addTrack(newTrack, localStreamRef.current);
+                    } catch (trackErr) {
+                      console.warn("Lỗi addTrack dự phòng khi bật Camera:", trackErr);
+                    }
+                  }
                 }
               });
             }
@@ -885,7 +913,13 @@ export default function CallRoom() {
                   {/* Luôn render VideoPlayer để phát âm thanh ngay cả khi tắt camera */}
                   {remoteStreams[p.id] && (
                     <div className={`absolute inset-0 ${pMedia.videoOn ? 'block' : 'opacity-0 pointer-events-none'}`}>
-                      <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
+                      <VideoPlayer 
+                        stream={remoteStreams[p.id]} 
+                        isLocal={false} 
+                        sinkId={selectedSpeaker} 
+                        micOn={pMedia.micOn} 
+                        videoOn={pMedia.videoOn} 
+                      />
                     </div>
                   )}
                   
