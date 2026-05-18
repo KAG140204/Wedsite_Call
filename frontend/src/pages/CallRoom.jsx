@@ -123,11 +123,15 @@ export default function CallRoom() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ startX: 0, startY: 0 });
 
+  const isDraggingRef = useRef(false);
+
   const handleDragStart = (e) => {
     // Nếu click trúng button thì ưu tiên xử lý click thông thường, không kéo
     if (e.target.closest('button')) return;
     
+    isDraggingRef.current = true;
     setIsDragging(true);
+    
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     
@@ -137,39 +141,41 @@ export default function CallRoom() {
     };
   };
 
-  const handleDragMove = (e) => {
-    if (!isDragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    const newX = clientX - dragStartRef.current.startX;
-    const newY = clientY - dragStartRef.current.startY;
-    
-    setMenuPos({ x: newX, y: newY });
-  };
-
-  const handleDragEnd = () => {
-    setIsDragging(false);
-  };
-
   useEffect(() => {
-    if (isDragging) {
-      const onMove = (e) => handleDragMove(e);
-      const onEnd = () => handleDragEnd();
+    const handleDragMove = (e) => {
+      if (!isDraggingRef.current) return;
       
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onEnd);
-      window.addEventListener('touchmove', onMove, { passive: false });
-      window.addEventListener('touchend', onEnd);
+      // Ngăn chặn hành vi cuộn mặc định của trình duyệt để kéo mượt mà
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       
-      return () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onEnd);
-        window.removeEventListener('touchmove', onMove);
-        window.removeEventListener('touchend', onEnd);
-      };
-    }
-  }, [isDragging]);
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      const newX = clientX - dragStartRef.current.startX;
+      const newY = clientY - dragStartRef.current.startY;
+      
+      setMenuPos({ x: newX, y: newY });
+    };
+
+    const handleDragEnd = () => {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+    };
+
+    window.addEventListener('mousemove', handleDragMove);
+    window.addEventListener('mouseup', handleDragEnd);
+    window.addEventListener('touchmove', handleDragMove, { passive: false });
+    window.addEventListener('touchend', handleDragEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleDragMove);
+      window.removeEventListener('mouseup', handleDragEnd);
+      window.removeEventListener('touchmove', handleDragMove);
+      window.removeEventListener('touchend', handleDragEnd);
+    };
+  }, [menuPos]);
 
   // --- DEVICE SETTINGS STATE ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
