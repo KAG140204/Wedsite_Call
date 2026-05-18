@@ -765,9 +765,15 @@ export default function CallRoom() {
               const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
               return (
                 <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
-                  {remoteStreams[p.id] && pMedia.videoOn ? (
-                    <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
-                  ) : (
+                  {/* Luôn render VideoPlayer để phát âm thanh ngay cả khi tắt camera */}
+                  {remoteStreams[p.id] && (
+                    <div className={`absolute inset-0 ${pMedia.videoOn ? 'block' : 'opacity-0 pointer-events-none'}`}>
+                      <VideoPlayer stream={remoteStreams[p.id]} isLocal={false} sinkId={selectedSpeaker} />
+                    </div>
+                  )}
+                  
+                  {/* Hiển thị Avatar Placeholder phủ lên khi camera tắt */}
+                  {!pMedia.videoOn && (
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
                         {p.name.charAt(0).toUpperCase()}
