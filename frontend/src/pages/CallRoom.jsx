@@ -275,7 +275,14 @@ export default function CallRoom() {
       if (micStreamRef.current) {
         micStreamRef.current.getTracks().forEach(t => t.stop());
       }
-      const testConstraints = { audio: { deviceId: { exact: deviceId } } };
+      const testConstraints = { 
+        audio: { 
+          deviceId: { exact: deviceId },
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      };
       const tempStream = await navigator.mediaDevices.getUserMedia(testConstraints);
       micStreamRef.current = tempStream;
       startMicVisualizer(tempStream);
@@ -286,7 +293,14 @@ export default function CallRoom() {
     // 2. Nếu mic đang bật trong cuộc gọi, thay thế nóng WebRTC track
     if (micOn) {
       try {
-        const constraints = { audio: { deviceId: { exact: deviceId } } };
+        const constraints = { 
+          audio: { 
+            deviceId: { exact: deviceId },
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTrack = stream.getAudioTracks()[0];
         
@@ -640,7 +654,11 @@ export default function CallRoom() {
       broadcastMediaState();
     } else {
       try {
-        const constraints = selectedMic ? { audio: { deviceId: { exact: selectedMic } } } : { audio: true };
+        const constraints = {
+          audio: selectedMic 
+            ? { deviceId: { exact: selectedMic }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            : { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTrack = stream.getAudioTracks()[0];
         
