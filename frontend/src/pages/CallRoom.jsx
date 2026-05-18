@@ -34,7 +34,30 @@ const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
       muted={isMuted || isLocal} // Luôn tắt tiếng video của chính mình để tránh dội âm (Echo)
       className={`w-full h-full object-contain bg-black/80 ${isLocal ? 'scale-x-[-1]' : ''}`} // Thay object-cover thành object-contain để không bị cắt xén
     />
-  );
+};
+
+// Component phát âm thanh của người dùng khác độc lập với Camera
+const RemoteAudio = ({ stream, sinkId }) => {
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    if (audioRef.current && stream) {
+      audioRef.current.srcObject = stream;
+      
+      // Kích hoạt phát lại âm thanh chủ động, giải quyết triệt để vấn đề autoplay chặn tiếng
+      audioRef.current.play()
+        .catch(err => console.warn("Audio autoplay blocked:", err));
+    }
+  }, [stream]);
+
+  useEffect(() => {
+    if (audioRef.current && sinkId && audioRef.current.setSinkId) {
+      audioRef.current.setSinkId(sinkId)
+        .catch(err => console.error("Error setting speaker sink ID for audio:", err));
+    }
+  }, [sinkId]);
+
+  return <audio ref={audioRef} autoPlay playsInline className="hidden" />;
 };
 
 // Tạo một stream ảo (Silent Audio và Black Video) để làm nền tảng WebRTC khởi tạo không cần xin quyền ngay
@@ -910,21 +933,23 @@ export default function CallRoom() {
               const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
               return (
                 <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
-                  {/* Luôn render VideoPlayer để phát âm thanh ngay cả khi tắt camera */}
+                  {/* Luôn phát âm thanh của đối phương độc lập với camera qua thẻ <audio> riêng biệt */}
                   {remoteStreams[p.id] && (
-                    <div className={`absolute inset-0 ${pMedia.videoOn ? 'block' : 'opacity-0 pointer-events-none'}`}>
-                      <VideoPlayer 
-                        stream={remoteStreams[p.id]} 
-                        isLocal={false} 
-                        sinkId={selectedSpeaker} 
-                        micOn={pMedia.micOn} 
-                        videoOn={pMedia.videoOn} 
-                      />
-                    </div>
+                    <RemoteAudio stream={remoteStreams[p.id]} sinkId={selectedSpeaker} />
                   )}
-                  
-                  {/* Hiển thị Avatar Placeholder phủ lên khi camera tắt */}
-                  {!pMedia.videoOn && (
+
+                  {/* Render VideoPlayer chỉ khi Camera đang bật (ở chế độ Muted để không bị dội âm) */}
+                  {remoteStreams[p.id] && pMedia.videoOn ? (
+                    <VideoPlayer 
+                      stream={remoteStreams[p.id]} 
+                      isMuted={true} 
+                      isLocal={false} 
+                      sinkId={selectedSpeaker} 
+                      micOn={pMedia.micOn} 
+                      videoOn={pMedia.videoOn} 
+                    />
+                  ) : (
+                    /* Hiển thị Avatar Placeholder phủ lên khi camera tắt */
                     <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl font-bold text-indigo-200">
                         {p.name.charAt(0).toUpperCase()}
