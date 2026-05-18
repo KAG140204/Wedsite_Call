@@ -212,28 +212,30 @@ export default function CallRoom() {
     let targetMicId = selectedMic;
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const hasLabels = devices.some(d => d.label !== '');
-      if (!hasLabels) {
-        // Thử xin quyền đồng thời cả 2 thiết bị trước
+      
+      const hasMic = devices.some(d => d.kind === 'audioinput');
+      const hasCam = devices.some(d => d.kind === 'videoinput');
+      
+      const hasMicLabel = devices.some(d => d.kind === 'audioinput' && d.label !== '');
+      const hasCamLabel = devices.some(d => d.kind === 'videoinput' && d.label !== '');
+      
+      // Xin quyền Microphone nếu có phần cứng mic nhưng chưa được cấp quyền (nhãn rỗng)
+      if (hasMic && !hasMicLabel) {
         try {
-          const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-          tempStream.getTracks().forEach(t => t.stop());
-        } catch (jointErr) {
-          console.warn("Xin quyền đồng thời thất bại (có thể thiếu camera hoặc mic), chuyển sang xin riêng lẻ...", jointErr);
-          // Xin quyền Mic riêng lẻ
-          try {
-            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            micStream.getTracks().forEach(t => t.stop());
-          } catch (micErr) {
-            console.warn("Không có mic hoặc bị từ chối quyền mic:", micErr);
-          }
-          // Xin quyền Camera riêng lẻ
-          try {
-            const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            camStream.getTracks().forEach(t => t.stop());
-          } catch (camErr) {
-            console.warn("Không có camera hoặc bị từ chối quyền camera:", camErr);
-          }
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          micStream.getTracks().forEach(t => t.stop());
+        } catch (micErr) {
+          console.warn("Không thể xin quyền Mic:", micErr);
+        }
+      }
+      
+      // Xin quyền Camera nếu có phần cứng camera nhưng chưa được cấp quyền (nhãn rỗng)
+      if (hasCam && !hasCamLabel) {
+        try {
+          const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          camStream.getTracks().forEach(t => t.stop());
+        } catch (camErr) {
+          console.warn("Không thể xin quyền Camera:", camErr);
         }
       }
     } catch (e) {
