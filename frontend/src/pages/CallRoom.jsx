@@ -66,10 +66,7 @@ const createEmptyStream = () => {
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioContextClass();
-    const oscillator = audioContext.createOscillator();
     const dst = audioContext.createMediaStreamDestination();
-    oscillator.connect(dst);
-    oscillator.start();
     const silentAudioTrack = dst.stream.getAudioTracks()[0];
 
     const canvas = document.createElement('canvas');
