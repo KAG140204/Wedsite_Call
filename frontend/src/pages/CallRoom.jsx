@@ -356,8 +356,11 @@ export default function CallRoom() {
         audio: { 
           deviceId: { exact: deviceId },
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+          noiseSuppression: false, // Tắt lọc ồn để tiếng thô trong trẻo, chân thực
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000,
+          sampleSize: 16
         } 
       };
       const tempStream = await navigator.mediaDevices.getUserMedia(testConstraints);
@@ -374,8 +377,11 @@ export default function CallRoom() {
           audio: { 
             deviceId: { exact: deviceId },
             echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+            noiseSuppression: false, // Tắt lọc ồn để tiếng thô trong trẻo, chân thực
+            autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 48000,
+            sampleSize: 16
           } 
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -736,8 +742,23 @@ export default function CallRoom() {
       try {
         const constraints = {
           audio: selectedMic 
-            ? { deviceId: { exact: selectedMic }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-            : { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+            ? { 
+                deviceId: { exact: selectedMic }, 
+                echoCancellation: true, 
+                noiseSuppression: false, // Tắt lọc ồn để tiếng thô trong trẻo, chân thực
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 48000,
+                sampleSize: 16
+              }
+            : { 
+                echoCancellation: true, 
+                noiseSuppression: false, // Tắt lọc ồn để tiếng thô trong trẻo, chân thực
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 48000,
+                sampleSize: 16
+              }
         };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         const newTrack = stream.getAudioTracks()[0];
