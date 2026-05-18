@@ -101,9 +101,20 @@ export default function AdminDashboard() {
   const adminDragStartRef = useRef({ startX: 0, startY: 0 });
   const adminDragStartCoords = useRef({ x: 0, y: 0 });
   const isAdminDraggingRef = useRef(false);
+  const adminLastTouchTime = useRef(0);
 
   const handleAdminDragStart = (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest('.admin-menu-item')) return;
+    
+    // Ngăn chặn xung đột đúp chuột khi trình duyệt mobile giả lập mousedown sau touchstart
+    if (e.type === 'touchstart') {
+      adminLastTouchTime.current = Date.now();
+    } else if (e.type === 'mousedown') {
+      if (Date.now() - adminLastTouchTime.current < 600) {
+        return;
+      }
+    }
     
     isAdminDraggingRef.current = true;
     setIsAdminDragging(true);

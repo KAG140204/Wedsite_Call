@@ -16,10 +16,21 @@ export default function GooeyProfileMenu() {
   const dragStartRef = useRef({ startX: 0, startY: 0 });
   const dragStartCoords = useRef({ x: 0, y: 0 });
   const isDraggingRef = useRef(false);
+  const lastTouchTime = useRef(0);
 
   const handleDragStart = (e) => {
-    // Chỉ kích hoạt kéo khi click trực tiếp vào nút menu chính, không phải các menu-item đã nở ra
+    // Chỉ xử lý click chuột trái hoặc touch chạm tay
+    if (e.button !== undefined && e.button !== 0) return;
     if (e.target.closest('.menu-item')) return;
+    
+    // Ngăn chặn xung đột đúp chuột khi trình duyệt mobile giả lập mousedown sau touchstart
+    if (e.type === 'touchstart') {
+      lastTouchTime.current = Date.now();
+    } else if (e.type === 'mousedown') {
+      if (Date.now() - lastTouchTime.current < 600) {
+        return;
+      }
+    }
     
     isDraggingRef.current = true;
     setIsDragging(true);
