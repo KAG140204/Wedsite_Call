@@ -214,11 +214,30 @@ export default function CallRoom() {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const hasLabels = devices.some(d => d.label !== '');
       if (!hasLabels) {
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        tempStream.getTracks().forEach(t => t.stop());
+        // Thử xin quyền đồng thời cả 2 thiết bị trước
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+          tempStream.getTracks().forEach(t => t.stop());
+        } catch (jointErr) {
+          console.warn("Xin quyền đồng thời thất bại (có thể thiếu camera hoặc mic), chuyển sang xin riêng lẻ...", jointErr);
+          // Xin quyền Mic riêng lẻ
+          try {
+            const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            micStream.getTracks().forEach(t => t.stop());
+          } catch (micErr) {
+            console.warn("Không có mic hoặc bị từ chối quyền mic:", micErr);
+          }
+          // Xin quyền Camera riêng lẻ
+          try {
+            const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            camStream.getTracks().forEach(t => t.stop());
+          } catch (camErr) {
+            console.warn("Không có camera hoặc bị từ chối quyền camera:", camErr);
+          }
+        }
       }
     } catch (e) {
-      console.warn("Chưa cấp quyền thiết bị.");
+      console.warn("Lỗi kiểm tra quyền thiết bị:", e);
     }
     
     // Tải và đồng bộ thiết bị
@@ -408,6 +427,9 @@ export default function CallRoom() {
       const emptyStream = createEmptyStream();
       emptyStreamRef.current = emptyStream;
       localStreamRef.current = emptyStream;
+      
+      // Tải trước danh sách thiết bị sẵn có (không xin quyền ngầm)
+      loadDevices();
       
       try {
         // 2. Khởi tạo PeerJS (Luôn khởi chạy kể cả khi chưa xin quyền thiết bị thực tế)
