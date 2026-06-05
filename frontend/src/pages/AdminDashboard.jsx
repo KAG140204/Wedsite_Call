@@ -334,10 +334,11 @@ export default function AdminDashboard() {
         {/* ====== ADMIN GOOEY MENU ====== */}
         <div 
           style={{
+            bottom: 'calc(2rem + 2cm)',
             transform: `translate(${adminMenuPos.x}px, ${adminMenuPos.y}px)`,
             cursor: isAdminDragging ? 'grabbing' : 'grab'
           }}
-          className="fixed bottom-[calc(2rem+2cm)] left-8 z-50 select-none touch-none"
+          className="fixed left-8 z-50 select-none touch-none"
         >
           <nav className="admin-gooey-menu text-white">
             <input 

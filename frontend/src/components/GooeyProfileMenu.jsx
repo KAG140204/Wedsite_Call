@@ -111,10 +111,11 @@ export default function GooeyProfileMenu() {
   return (
     <div 
       style={{
+        bottom: 'calc(2rem + 2cm)',
         transform: `translate(${menuPos.x}px, ${menuPos.y}px)`,
         cursor: isDragging ? 'grabbing' : 'grab'
       }}
-      className="fixed bottom-[calc(2rem+2cm)] right-8 z-50 select-none touch-none"
+      className="fixed right-8 z-50 select-none touch-none"
     >
       <nav className="gooey-menu text-white">
         <input 
