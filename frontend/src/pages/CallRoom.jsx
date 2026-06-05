@@ -1246,11 +1246,6 @@ export default function CallRoom() {
                     <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-3" style={{ height: '85%' }}></div>
                   </div>
                 )}
-
-                {/* Vạch Ping cục bộ */}
-                <div className="flex items-center gap-1 text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 ml-1">
-                  <span>Local</span>
-                </div>
               </div>
             </div>
 
