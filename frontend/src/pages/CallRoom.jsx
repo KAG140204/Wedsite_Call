@@ -273,14 +273,17 @@ export default function CallRoom() {
     });
   }, [remoteStreams]);
 
-  // Theo dõi localStream & micOn để bật/tắt analyser local
+  // Theo dõi micOn để bật/tắt analyser local
+  // Lưu ý: localStreamRef và peerRef được khai báo SAU đoạn này trong component,
+  // nhưng useEffect callback chỉ chạy SAU render nên an toàn khi truy cập bên trong body.
+  // KHÔNG ĐƯỢC đặt ref.current vào dependency array vì nó được đánh giá lúc render (gây TDZ crash).
   useEffect(() => {
-    if (micOn && localStreamRef.current) {
+    if (micOn && localStreamRef?.current) {
       setupAudioAnalyser('local', localStreamRef.current);
     } else {
       removeAudioAnalyser('local');
     }
-  }, [micOn, localStreamRef.current]);
+  }, [micOn]);
 
   // Vòng lặp đo Ping WebRTC (mỗi 3 giây)
   useEffect(() => {
