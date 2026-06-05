@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Users, Activity, LogOut, ArrowLeft, Database, List, Search, Trash2, ShieldCheck, ShieldOff, BarChart3, TrendingUp, UserCheck, Gamepad2, FileText, Calendar } from 'lucide-react';
