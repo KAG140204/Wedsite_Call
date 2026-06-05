@@ -488,6 +488,17 @@ export default function CallRoom() {
   const localStreamRef = useRef(null);
   const emptyStreamRef = useRef(null);
 
+  // Khóa cuộn trang toàn màn hình ở body & html để cố định giao diện call
+  useEffect(() => {
+    document.body.classList.add('overflow-hidden', 'fixed', 'w-full', 'h-full');
+    document.documentElement.classList.add('overflow-hidden');
+    
+    return () => {
+      document.body.classList.remove('overflow-hidden', 'fixed', 'w-full', 'h-full');
+      document.documentElement.classList.remove('overflow-hidden');
+    };
+  }, []);
+
   // Cuộn xuống dòng tin nhắn mới nhất
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -982,7 +993,7 @@ export default function CallRoom() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col bg-gray-950 text-white overflow-hidden">
+    <div className="h-dvh w-full flex flex-col bg-gray-950 text-white overflow-hidden">
       {error && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-500/90 text-white px-6 py-2 rounded-full shadow-lg backdrop-blur-md">
           {error}
@@ -1116,7 +1127,7 @@ export default function CallRoom() {
 
         {/* Chat Sidebar Panel */}
         {isChatOpen && (
-          <aside className="relative z-20 w-full md:w-80 lg:w-96 glass-panel border-l border-gray-800 flex flex-col h-full animate-in slide-in-from-right-8 duration-300">
+          <aside className="fixed inset-0 md:relative md:inset-auto z-50 md:z-20 w-full md:w-80 lg:w-96 glass-panel md:border-l border-gray-800 bg-gray-950 md:bg-gray-950/30 flex flex-col h-full animate-in slide-in-from-right-8 duration-300">
           <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
             <h3 className="font-semibold text-lg flex items-center gap-2">
               <MessageSquare className="w-5 h-5 text-blue-400" /> Trò chuyện
