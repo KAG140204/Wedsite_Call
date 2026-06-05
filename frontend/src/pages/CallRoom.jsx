@@ -120,11 +120,17 @@ export default function CallRoom() {
   const [error, setError] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
+  // --- SCREEN SHARE DEDICATED STATE ---
+  const screenStreamRef = useRef(null); // Luồng màn hình riêng (chỉ người share có)
+  const [screenSharerName, setScreenSharerName] = useState(null); // Tên người đang share (bao gồm chính mình)
+  const [remoteScreenStream, setRemoteScreenStream] = useState(null); // Luồng màn hình nhận từ người khác
+
   // --- PARTICIPANTS MEDIA STATES ---
   const [participantsMedia, setParticipantsMedia] = useState({}); // { [userId]: { micOn, videoOn } }
 
   const micOnRef = useRef(false);
   const videoOnRef = useRef(false);
+  const isScreenSharingRef = useRef(false);
 
   // --- CHAT STATE ---
   const [messages, setMessages] = useState([]);
@@ -656,11 +662,21 @@ export default function CallRoom() {
         });
 
         peer.on('call', (call) => {
-          // Trả lời bằng stream hiện tại (chứa các transceiver ảo sẵn có để thay thế nóng sau này)
-          call.answer(localStreamRef.current);
-          call.on('stream', (userVideoStream) => {
-            setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
-          });
+          const isScreenCall = call.metadata?.type === 'screen';
+          
+          if (isScreenCall) {
+            // Cuộc gọi screen share: chỉ nhận stream, không gửi lại gì
+            call.answer();
+            call.on('stream', (screenVideoStream) => {
+              setRemoteScreenStream(screenVideoStream);
+            });
+          } else {
+            // Cuộc gọi camera/mic bình thường
+            call.answer(localStreamRef.current);
+            call.on('stream', (userVideoStream) => {
+              setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
+            });
+          }
         });
       } catch (peerErr) {
         console.error('Lỗi khởi tạo PeerJS:', peerErr);
@@ -713,6 +729,20 @@ export default function CallRoom() {
                   setRemoteStreams(prev => ({ ...prev, [data.user.id]: userVideoStream }));
                 });
               }
+
+              // Nếu mình đang share màn hình, chủ động gọi truyền luồng màn hình cho người mới
+              if (isScreenSharingRef.current && screenStreamRef.current && peerRef.current) {
+                peerRef.current.call(data.user.id, screenStreamRef.current, { metadata: { type: 'screen' } });
+                
+                // Đồng thời gửi tin nhắn ws thông báo mình đang share màn hình để người mới hiển thị khung chiếu
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({
+                    type: 'screen_share',
+                    sharing: true,
+                    userName: user.name
+                  }));
+                }
+              }
             }
             break;
           case 'user_left':
@@ -727,6 +757,11 @@ export default function CallRoom() {
               delete newMedia[data.user.id];
               return newMedia;
             });
+            // Nếu người rời phòng đang share màn hình, xóa luồng screen
+            if (screenSharerName === data.user.name) {
+              setScreenSharerName(null);
+              setRemoteScreenStream(null);
+            }
             break;
           case 'room_renamed':
             setRoomName(data.roomName);
@@ -740,6 +775,14 @@ export default function CallRoom() {
               ...prev,
               [data.userId]: { micOn: data.micOn, videoOn: data.videoOn }
             }));
+            break;
+          case 'screen_share':
+            if (data.sharing) {
+              setScreenSharerName(data.userName);
+            } else {
+              setScreenSharerName(null);
+              setRemoteScreenStream(null);
+            }
             break;
           // --- CHAT EVENTS ---
           case 'chat_history':
@@ -1024,65 +1067,48 @@ export default function CallRoom() {
   const toggleScreenShare = async () => {
     try {
       if (isScreenSharing) {
-        let videoTrack = null;
-        if (videoOn) {
-          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          videoTrack = videoStream.getVideoTracks()[0];
-        } else {
-          videoTrack = emptyStreamRef.current?.getVideoTracks()[0];
+        // === TẮT SCREEN SHARE ===
+        // Dừng track màn hình
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach(t => t.stop());
+          screenStreamRef.current = null;
         }
-        
-        if (videoTrack) {
-          const oldTrack = localStreamRef.current.getVideoTracks()[0];
-          localStreamRef.current.removeTrack(oldTrack);
-          localStreamRef.current.addTrack(videoTrack);
-          oldTrack.stop();
-          
-          videoTrack.enabled = videoOn;
-          setIsScreenSharing(false);
-          
-          if (peerRef.current) {
-            Object.keys(peerRef.current.connections).forEach(peerId => {
-              const connList = peerRef.current.connections[peerId];
-              if (connList) {
-                connList.forEach(conn => {
-                  if (conn.peerConnection) {
-                    const senders = conn.peerConnection.getSenders();
-                    const sender = senders.find(s => s.track && s.track.kind === 'video');
-                    if (sender) sender.replaceTrack(videoTrack);
-                  }
-                });
-              }
-            });
-          }
+        setIsScreenSharing(false);
+        isScreenSharingRef.current = false;
+        setScreenSharerName(null);
+
+        // Thông báo cho tất cả người khác rằng mình ngừng share
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'screen_share', sharing: false }));
         }
       } else {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        // === BẬT SCREEN SHARE ===
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
         const screenTrack = screenStream.getVideoTracks()[0];
-        const oldTrack = localStreamRef.current.getVideoTracks()[0];
-        
-        localStreamRef.current.removeTrack(oldTrack);
-        localStreamRef.current.addTrack(screenTrack);
-        
-        oldTrack.stop();
+
+        // Lưu stream màn hình riêng biệt (KHÔNG thay thế camera track)
+        screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
+        isScreenSharingRef.current = true;
+        setScreenSharerName(user.name);
 
-        screenTrack.onended = () => { toggleScreenShare(); };
-
+        // Gửi luồng màn hình cho tất cả peer hiện có bằng lệnh call mới (metadata đánh dấu là screen)
         if (peerRef.current) {
-          Object.keys(peerRef.current.connections).forEach(peerId => {
-            const connList = peerRef.current.connections[peerId];
-            if (connList) {
-              connList.forEach(conn => {
-                if (conn.peerConnection) {
-                  const senders = conn.peerConnection.getSenders();
-                  const sender = senders.find(s => s.track && s.track.kind === 'video');
-                  if (sender) sender.replaceTrack(screenTrack);
-                }
-              });
+          participants.forEach(p => {
+            const call = peerRef.current.call(p.id, screenStream, { metadata: { type: 'screen' } });
+            if (call) {
+              call.on('error', err => console.warn('Lỗi gửi screen share cho', p.id, err));
             }
           });
         }
+
+        // Thông báo cho tất cả người khác rằng mình đang share
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'screen_share', sharing: true }));
+        }
+
+        // Khi người dùng nhấn "Stop sharing" từ trình duyệt
+        screenTrack.onended = () => { toggleScreenShare(); };
       }
     } catch (err) {
       console.error('Screen sharing error:', err);
@@ -1103,7 +1129,9 @@ export default function CallRoom() {
   
   // Logic tính toán kích thước khung video bằng Flexbox + Aspect Ratio (16:9)
   let itemClass = 'w-full max-w-5xl'; // 1 người: chiếm giữa màn hình, giới hạn max-width
-  if (totalUsers === 2) {
+  if (screenSharerName) {
+    itemClass = 'w-32 sm:w-44 md:w-56 aspect-video';
+  } else if (totalUsers === 2) {
     itemClass = 'w-full md:w-[calc(50%-0.5rem)] max-w-4xl'; // 2 người: mobile xếp dọc, desktop xếp ngang
   } else if (totalUsers >= 3 && totalUsers <= 4) {
     itemClass = 'w-[calc(50%-0.5rem)]'; // 3-4 người: chia 2 cột đều nhau
@@ -1176,12 +1204,29 @@ export default function CallRoom() {
         
         {/* Main Video Area */}
         <main className={`flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center relative z-10 transition-all duration-300 ${isChatOpen ? 'pr-4 md:pr-0' : ''}`}>
+          
+          {/* Dành riêng cho màn chiếu Screen Share */}
+          {screenSharerName && (screenStreamRef.current || remoteScreenStream) && (
+            <div className="w-full max-w-6xl aspect-video rounded-2xl overflow-hidden bg-black/90 border border-purple-500/30 shadow-2xl relative mb-4">
+              <VideoPlayer 
+                stream={screenSharerName === user.name ? screenStreamRef.current : remoteScreenStream} 
+                isMuted={true} 
+                isLocal={false} 
+                sinkId={selectedSpeaker} 
+              />
+              <div className="absolute bottom-3 left-3 bg-purple-900/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium border border-purple-500/20 z-10 flex items-center gap-2">
+                <MonitorUp className="w-4 h-4 text-purple-300 animate-pulse" />
+                <span>Đang trình chiếu: {screenSharerName === user.name ? 'Bạn' : screenSharerName}</span>
+              </div>
+            </div>
+          )}
+
           <div className="w-full max-w-7xl flex flex-wrap items-center justify-center gap-4">
             
             {/* Self Video */}
             <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${speakingUsers['local'] ? 'speaking-ring-glow' : ''}`}>
               {localStreamRef.current && videoOn ? (
-                <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} sinkId={selectedSpeaker} />
+                <VideoPlayer stream={localStreamRef.current} isLocal={true} sinkId={selectedSpeaker} />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
