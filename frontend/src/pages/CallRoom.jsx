@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check, Settings, Volume2 } from 'lucide-react';
+import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check, Settings, Volume2, Wifi } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
@@ -187,10 +187,128 @@ export default function CallRoom() {
     return () => {
       window.removeEventListener('mousemove', handleDragMove);
       window.removeEventListener('mouseup', handleDragEnd);
-      window.removeEventListener('touchmove', handleDragMove);
-      window.removeEventListener('touchend', handleDragEnd);
     };
   }, [menuPos]);
+
+  // --- VOICE VISUALIZER & PING STATE & LOGIC ---
+  const [speakingUsers, setSpeakingUsers] = useState({}); // { [userId]: boolean }
+  const [userPings, setUserPings] = useState({}); // { [userId]: number }
+  const speakingAudioContextRef = useRef(null);
+  const speakingAnalysersRef = useRef({}); // { [userId]: AnalyserNode }
+
+  const setupAudioAnalyser = (userId, stream) => {
+    if (!stream || stream.getAudioTracks().length === 0) return;
+    try {
+      if (!speakingAudioContextRef.current) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        speakingAudioContextRef.current = new AudioContextClass();
+      }
+      const ctx = speakingAudioContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      if (speakingAnalysersRef.current[userId]) return;
+
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      speakingAnalysersRef.current[userId] = analyser;
+    } catch (err) {
+      console.warn("Lỗi khởi tạo Audio Analyser cho " + userId, err);
+    }
+  };
+
+  const removeAudioAnalyser = (userId) => {
+    if (speakingAnalysersRef.current[userId]) {
+      delete speakingAnalysersRef.current[userId];
+    }
+  };
+
+  // Vòng lặp phát hiện tiếng nói
+  useEffect(() => {
+    const checkSpeaking = setInterval(() => {
+      if (!speakingAudioContextRef.current) return;
+      const newSpeaking = {};
+      const dataArray = new Uint8Array(128);
+
+      Object.keys(speakingAnalysersRef.current).forEach(userId => {
+        const analyser = speakingAnalysersRef.current[userId];
+        if (!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < 128; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / 128;
+        newSpeaking[userId] = average > 12; // Ngưỡng bắt đầu nói
+      });
+
+      setSpeakingUsers(newSpeaking);
+    }, 150);
+
+    return () => {
+      clearInterval(checkSpeaking);
+      if (speakingAudioContextRef.current) {
+        speakingAudioContextRef.current.close().catch(console.error);
+        speakingAudioContextRef.current = null;
+      }
+      speakingAnalysersRef.current = {};
+    };
+  }, []);
+
+  // Theo dõi remoteStreams để tạo/xóa analysers
+  useEffect(() => {
+    Object.keys(remoteStreams).forEach(userId => {
+      const stream = remoteStreams[userId];
+      if (stream) {
+        setupAudioAnalyser(userId, stream);
+      }
+    });
+
+    Object.keys(speakingAnalysersRef.current).forEach(userId => {
+      if (userId !== 'local' && !remoteStreams[userId]) {
+        removeAudioAnalyser(userId);
+      }
+    });
+  }, [remoteStreams]);
+
+  // Theo dõi localStream & micOn để bật/tắt analyser local
+  useEffect(() => {
+    if (micOn && localStreamRef.current) {
+      setupAudioAnalyser('local', localStreamRef.current);
+    } else {
+      removeAudioAnalyser('local');
+    }
+  }, [micOn, localStreamRef.current]);
+
+  // Vòng lặp đo Ping WebRTC (mỗi 3 giây)
+  useEffect(() => {
+    const checkPings = setInterval(async () => {
+      if (!peerRef.current || !peerRef.current.connections) return;
+      const newPings = {};
+
+      for (const peerId of Object.keys(peerRef.current.connections)) {
+        const connList = peerRef.current.connections[peerId];
+        const mediaConn = connList?.find(c => c.type === 'media');
+        if (mediaConn?.peerConnection) {
+          try {
+            const stats = await mediaConn.peerConnection.getStats();
+            stats.forEach(report => {
+              if (report.type === 'candidate-pair' && report.currentRoundTripTime !== undefined) {
+                newPings[peerId] = Math.round(report.currentRoundTripTime * 1000);
+              }
+            });
+          } catch (e) {
+            console.error("Lỗi lấy stats ping cho peer " + peerId, e);
+          }
+        }
+      }
+      setUserPings(newPings);
+    }, 3000);
+
+    return () => clearInterval(checkPings);
+  }, [participants]);
 
   // --- DEVICE SETTINGS STATE ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1058,7 +1176,7 @@ export default function CallRoom() {
           <div className="w-full max-w-7xl flex flex-wrap items-center justify-center gap-4">
             
             {/* Self Video */}
-            <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
+            <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${speakingUsers['local'] ? 'speaking-ring-glow' : ''}`}>
               {localStreamRef.current && videoOn ? (
                 <VideoPlayer stream={localStreamRef.current} isLocal={!isScreenSharing} sinkId={selectedSpeaker} />
               ) : (
@@ -1069,16 +1187,32 @@ export default function CallRoom() {
                 </div>
               )}
               <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-                Bạn {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
+                <span>Bạn</span> {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
                 {!micOn && <MicOff className="w-3 h-3 text-red-400" />}
+                
+                {/* Sóng âm thanh động khi đang nói */}
+                {speakingUsers['local'] && (
+                  <div className="flex items-end gap-0.5 h-3.5 w-3 ml-1" title="Đang nói">
+                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-1" style={{ height: '100%' }}></div>
+                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-2" style={{ height: '70%' }}></div>
+                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-3" style={{ height: '85%' }}></div>
+                  </div>
+                )}
+
+                {/* Vạch Ping cục bộ */}
+                <div className="flex items-center gap-1 text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20 ml-1">
+                  <span>Local</span>
+                </div>
               </div>
             </div>
 
             {/* Other Participants */}
             {participants.map((p) => {
               const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
+              const isSpeaking = speakingUsers[p.id];
+              const ping = userPings[p.id];
               return (
-                <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass}`}>
+                <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${isSpeaking ? 'speaking-ring-glow' : ''}`}>
                   {/* Luôn phát âm thanh của đối phương độc lập với camera qua thẻ <audio> riêng biệt */}
                   {remoteStreams[p.id] && (
                     <RemoteAudio stream={remoteStreams[p.id]} sinkId={selectedSpeaker} />
@@ -1103,8 +1237,30 @@ export default function CallRoom() {
                     </div>
                   )}
                   <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-                    {p.name} {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
+                    <span>{p.name}</span> {p.id === hostId && <span className="text-yellow-400 text-xs ml-1">👑</span>}
                     {!pMedia.micOn && <MicOff className="w-3 h-3 text-red-400 ml-1" />}
+                    
+                    {/* Sóng âm thanh động khi đang nói */}
+                    {isSpeaking && (
+                      <div className="flex items-end gap-0.5 h-3.5 w-3 ml-1" title="Đang nói">
+                        <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-1" style={{ height: '100%' }}></div>
+                        <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-2" style={{ height: '70%' }}></div>
+                        <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-3" style={{ height: '85%' }}></div>
+                      </div>
+                    )}
+
+                    {/* Vạch Ping và độ trễ */}
+                    {ping !== undefined && (
+                      <div 
+                        className={`flex items-center gap-1 text-[10px] font-semibold font-mono ${
+                          ping < 60 ? 'text-green-400' : ping < 150 ? 'text-yellow-400' : 'text-red-400'
+                        } bg-black/40 px-1.5 py-0.5 rounded border border-white/5 ml-1`}
+                        title={`Độ trễ WebRTC: ${ping}ms`}
+                      >
+                        <Wifi className="w-3 h-3 shrink-0" />
+                        <span>{ping}ms</span>
+                      </div>
+                    )}
                   </div>
                   
                   {isHost && (
