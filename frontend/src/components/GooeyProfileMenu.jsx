@@ -115,7 +115,7 @@ export default function GooeyProfileMenu() {
         transform: `translate(${menuPos.x}px, ${menuPos.y}px)`,
         cursor: isDragging ? 'grabbing' : 'grab'
       }}
-      className="fixed right-8 z-50 select-none touch-none"
+      className="fixed right-8 z-50 select-none touch-auto"
     >
       <nav className="gooey-menu text-white">
         <input 
@@ -130,7 +130,7 @@ export default function GooeyProfileMenu() {
         <label 
           onMouseDown={handleDragStart}
           onTouchStart={handleDragStart}
-          className="menu-open-button bg-purple-600 hover:bg-purple-500 shadow-xl shadow-purple-500/40"
+          className="menu-open-button bg-purple-600 hover:bg-purple-500 shadow-xl shadow-purple-500/40 touch-none"
         >
           <span className="lines line-1"></span>
           <span className="lines line-2"></span>

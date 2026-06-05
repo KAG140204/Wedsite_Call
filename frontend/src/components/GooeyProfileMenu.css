@@ -88,6 +88,10 @@
 /* Các nút con - khi đang đóng */
 .menu-item {
   background: #6b7280;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform ease-out 200ms, opacity ease-out 200ms, visibility ease-out 200ms;
 }
 .menu-item:hover {
   background: #4b5563;
@@ -100,6 +104,9 @@
 
 /* Nảy các nút con lên trên khi mở menu (Lan tỏa hình cánh quạt) */
 .menu-open:checked ~ .menu-item {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
   transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 

@@ -80,6 +80,10 @@
 /* Các nút con - khi đang đóng */
 .admin-menu-item {
   background: #4b5563;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: transform ease-out 200ms, opacity ease-out 200ms, visibility ease-out 200ms;
 }
 .admin-menu-item:hover {
   background: #374151;
@@ -93,6 +97,9 @@
 /* Nảy các nút con lên trên khi mở menu (Lan tỏa hình cánh quạt) */
 /* BOTTOM-LEFT pop to TOP-RIGHT */
 .admin-menu-open:checked ~ .admin-menu-item {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
   transition-timing-function: cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 

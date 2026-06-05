@@ -338,7 +338,7 @@ export default function AdminDashboard() {
             transform: `translate(${adminMenuPos.x}px, ${adminMenuPos.y}px)`,
             cursor: isAdminDragging ? 'grabbing' : 'grab'
           }}
-          className="fixed left-8 z-50 select-none touch-none"
+          className="fixed left-8 z-50 select-none touch-auto"
         >
           <nav className="admin-gooey-menu text-white">
             <input 
@@ -352,7 +352,7 @@ export default function AdminDashboard() {
             <label 
               onMouseDown={handleAdminDragStart}
               onTouchStart={handleAdminDragStart}
-              className="admin-menu-open-button bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/40"
+              className="admin-menu-open-button bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/40 touch-none"
             >
               <span className="admin-lines admin-line-1"></span>
               <span className="admin-lines admin-line-2"></span>

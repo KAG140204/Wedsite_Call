@@ -1189,10 +1189,10 @@ export default function CallRoom() {
           transform: `translate(calc(-50% + ${menuPos.x}px), ${menuPos.y}px)`,
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
-        className="fixed bottom-6 left-1/2 h-16 sm:h-20 flex items-center justify-center px-5 sm:px-6 rounded-full bg-gray-950/85 border border-gray-800/80 shadow-2xl backdrop-blur-xl z-40 gap-2.5 sm:gap-4 select-none touch-none transition-shadow duration-300 hover:shadow-purple-500/10 hover:border-purple-500/20 active:shadow-purple-500/20 active:border-purple-500/30"
+        className="fixed bottom-6 left-1/2 h-16 sm:h-20 flex items-center justify-center px-5 sm:px-6 rounded-full bg-gray-950/85 border border-gray-800/80 shadow-2xl backdrop-blur-xl z-40 gap-2.5 sm:gap-4 select-none touch-auto transition-shadow duration-300 hover:shadow-purple-500/10 hover:border-purple-500/20 active:shadow-purple-500/20 active:border-purple-500/30"
       >
         {/* Chỉ báo cầm kéo (Draggable Handle indicator) */}
-        <div className="flex flex-col gap-0.5 pr-2.5 cursor-grab active:cursor-grabbing select-none shrink-0 border-r border-gray-800 mr-0.5 opacity-40 hover:opacity-100 transition-opacity">
+        <div className="flex flex-col gap-0.5 pr-2.5 cursor-grab active:cursor-grabbing select-none shrink-0 border-r border-gray-800 mr-0.5 opacity-40 hover:opacity-100 transition-opacity touch-none">
           <div className="w-1 h-1 rounded-full bg-gray-400"></div>
           <div className="w-1 h-1 rounded-full bg-gray-400"></div>
           <div className="w-1 h-1 rounded-full bg-gray-400"></div>
