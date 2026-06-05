@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall, Copy, Check } from 'lucide-react';
+import { Plus, LogIn, Users, LogOut as LeaveIcon, PhoneCall, Copy, Check, Sparkles, Gamepad2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 export default function Home() {
@@ -102,12 +102,20 @@ export default function Home() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center p-4 sm:p-6 relative bg-gray-950 overflow-y-auto pb-24">
-      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center opacity-10 mix-blend-overlay pointer-events-none"></div>
+    <div className="min-h-screen w-full flex flex-col items-center p-4 sm:p-6 relative bg-gray-950 overflow-y-auto pb-24 noise-overlay">
+      {/* Animated Background Orbs */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute top-[-5%] left-[30%] w-[600px] h-[400px] bg-purple-600/12 blur-[150px] rounded-full animate-float-orb"></div>
+        <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-indigo-600/10 blur-[130px] rounded-full animate-float-orb-reverse"></div>
+        <div className="absolute top-[50%] left-[-5%] w-[300px] h-[300px] bg-pink-600/8 blur-[100px] rounded-full animate-float-orb-slow"></div>
+      </div>
+      
+      {/* Grid pattern */}
+      <div className="fixed inset-0 pointer-events-none z-[1] grid-pattern opacity-30"></div>
       
       <div className="absolute top-4 right-4 z-20 flex gap-4">
         {user.role === 'admin' && (
-          <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/50 hover:bg-blue-500/40 rounded-xl transition-all">
+          <button onClick={() => navigate('/admin')} className="px-4 py-2 bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 hover:border-blue-500/50 rounded-xl transition-all text-sm font-medium">
             Trang Quản Trị
           </button>
         )}
@@ -117,27 +125,49 @@ export default function Home() {
         
         {/* Left Side: My Groups */}
         <div className="flex-1">
-          <h2 className="text-3xl font-bold text-white mb-6 flex items-center gap-2">
-            <Users className="w-8 h-8 text-purple-400" /> 👋 Chào mừng trở lại, {user.name}
-          </h2>
-          <p className="text-gray-300 mb-4 max-w-2xl">
-            Squad đang chờ. Tạo phòng mới hoặc nhập mã để vào call và lên chiến thuật trước giờ combat.
-          </p>
+          <div className="animate-fade-in-up">
+            <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              Chào mừng trở lại, {user.name}
+            </h2>
+            <p className="text-gray-400 mb-6 max-w-2xl text-sm">
+              Squad đang chờ. Tạo phòng mới hoặc nhập mã để vào call và lên chiến thuật trước giờ combat.
+            </p>
+          </div>
           
           {loadingRooms ? (
-            <div className="text-gray-400">Đang tải danh sách nhóm...</div>
+            <div className="glass-panel p-8 rounded-2xl text-center">
+              <div className="w-8 h-8 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin mx-auto mb-3"></div>
+              <p className="text-gray-400 text-sm">Đang tải danh sách nhóm...</p>
+            </div>
           ) : myRooms.length === 0 ? (
-            <div className="glass-panel p-8 rounded-2xl text-center text-gray-400">
-              Bạn chưa tham gia phòng nào. Tạo một phòng mới hoặc nhập mã phòng để kết nối cùng đồng đội.
+            <div className="animate-fade-in-up delay-200 glass-panel p-10 rounded-3xl text-center shimmer-border">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-5">
+                <Gamepad2 className="w-10 h-10 text-purple-400/60" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-300 mb-2">Chưa có phòng nào</h3>
+              <p className="text-gray-500 text-sm max-w-sm mx-auto">
+                Tạo một phòng mới hoặc nhập mã phòng để kết nối cùng đồng đội và bắt đầu call.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myRooms.map(room => (
-                <div key={room.roomId || room.id} className="glass-panel p-6 rounded-2xl border border-gray-800 hover:border-purple-500/50 transition-all group flex flex-col justify-between">
+              {myRooms.map((room, index) => (
+                <div 
+                  key={room.roomId || room.id} 
+                  className="animate-fade-in-up glass-panel p-6 rounded-2xl card-glow shimmer-border flex flex-col justify-between"
+                  style={{ animationDelay: `${(index + 1) * 100}ms` }}
+                >
                   <div>
                     <div className="flex justify-between items-start">
                       <h3 className="text-xl font-bold text-white mb-1 truncate pr-2">{room.roomName}</h3>
-                      {room.hostId === user.id && <span className="bg-yellow-500/20 text-yellow-400 text-xs px-2 py-1 rounded-md border border-yellow-500/30 shrink-0">Host</span>}
+                      {room.hostId === user.id && (
+                        <span className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 text-xs px-2.5 py-1 rounded-lg border border-yellow-500/30 shrink-0 font-medium">
+                          👑 Host
+                        </span>
+                      )}
                     </div>
                     
                     <div className="flex items-center gap-2 mb-3 bg-gray-900/50 rounded-lg p-2 w-fit">
@@ -166,7 +196,7 @@ export default function Home() {
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {(room.members || []).slice(0, 5).map((m, i) => (
-                          <span key={i} className="inline-flex items-center gap-1 bg-gray-800/80 text-xs text-gray-300 px-2 py-1 rounded-full border border-gray-700">
+                          <span key={i} className="inline-flex items-center gap-1 bg-gray-800/80 text-xs text-gray-300 px-2 py-1 rounded-full border border-gray-700/50">
                             <span className="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-[8px] font-bold text-white flex-shrink-0">
                               {m.name?.charAt(0)?.toUpperCase() || '?'}
                             </span>
@@ -183,13 +213,13 @@ export default function Home() {
                   <div className="flex gap-2 mt-2">
                     <button 
                       onClick={() => navigate(`/room/${room.roomId || room.id}`)}
-                      className="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-lg"
+                      className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white py-2.5 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/15 hover:-translate-y-0.5"
                     >
                       <PhoneCall className="w-4 h-4" /> Tham gia Call
                     </button>
                     <button 
                       onClick={() => handleLeaveGroup(room.roomId || room.id)}
-                      className="px-3 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500/50 rounded-lg transition-colors flex items-center justify-center"
+                      className="px-3 bg-gray-800/60 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700/50 hover:border-red-500/50 rounded-xl transition-all flex items-center justify-center"
                       title="Rời nhóm"
                     >
                       <LeaveIcon className="w-4 h-4" />
@@ -203,33 +233,43 @@ export default function Home() {
 
         {/* Right Side: Create / Join Actions */}
         <div className="w-full lg:w-96 flex flex-col gap-6">
-          <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Plus className="w-5 h-5 text-purple-400" /> 🎮 Tạo Squad Mới</h3>
+          <div className="animate-fade-in-up delay-200 glass-panel rounded-3xl p-6 relative shadow-2xl shadow-purple-500/5 shimmer-border">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center">
+                <Plus className="w-4 h-4 text-white" />
+              </div>
+              Tạo Squad Mới
+            </h3>
             <form onSubmit={handleCreateRoom} className="space-y-4">
               <input 
                 type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)}
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                className="w-full bg-gray-900/60 border border-gray-700/60 rounded-xl px-4 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
                 placeholder="Đặt tên phòng (VD: Rank Kim Cương tối nay)"
               />
-              <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-                {isLoading ? 'Đang tạo...' : 'Tạo Phòng Ngay'}
+              <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-purple-500/15 transition-all transform hover:-translate-y-0.5">
+                {isLoading ? 'Đang tạo...' : '🎮 Tạo Phòng Ngay'}
               </button>
             </form>
           </div>
 
-          <div className="glass-panel rounded-3xl p-6 relative shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><LogIn className="w-5 h-5 text-blue-400" /> 🚀 Tham Gia Bằng Mã</h3>
+          <div className="animate-fade-in-up delay-400 glass-panel rounded-3xl p-6 relative shadow-2xl shadow-indigo-500/5 shimmer-border">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-500 to-cyan-500 flex items-center justify-center">
+                <LogIn className="w-4 h-4 text-white" />
+              </div>
+              Tham Gia Bằng Mã
+            </h3>
             <form onSubmit={handleJoinRoomAPI} className="space-y-4">
               <input 
                 type="text" required value={roomId} onChange={(e) => setRoomId(e.target.value)}
-                className="w-full bg-gray-900/50 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                className="w-full bg-gray-900/60 border border-gray-700/60 rounded-xl px-4 py-3.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
                 placeholder="Nhập mã phòng tại đây..."
               />
-              <button type="submit" className="w-full glass-button text-white font-semibold py-3 rounded-xl shadow-lg transition-transform transform hover:-translate-y-1">
-                Vào Call
+              <button type="submit" className="w-full glass-button text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5">
+                🚀 Vào Call
               </button>
             </form>
-            {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-2 rounded-lg border border-red-500/20">{error}</div>}
+            {error && <div className="mt-4 text-red-400 text-sm text-center bg-red-500/10 p-3 rounded-xl border border-red-500/20 animate-fade-in-up">{error}</div>}
           </div>
         </div>
       </div>
