@@ -114,7 +114,7 @@ export default function GooeyProfileMenu() {
         transform: `translate(${menuPos.x}px, ${menuPos.y}px)`,
         cursor: isDragging ? 'grabbing' : 'grab'
       }}
-      className="fixed bottom-8 right-8 z-50 select-none touch-none"
+      className="fixed bottom-[calc(2rem+2cm)] right-8 z-50 select-none touch-none"
     >
       <nav className="gooey-menu text-white">
         <input 

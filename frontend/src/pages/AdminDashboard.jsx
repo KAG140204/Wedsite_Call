@@ -337,7 +337,7 @@ export default function AdminDashboard() {
             transform: `translate(${adminMenuPos.x}px, ${adminMenuPos.y}px)`,
             cursor: isAdminDragging ? 'grabbing' : 'grab'
           }}
-          className="fixed bottom-8 left-8 z-50 select-none touch-none"
+          className="fixed bottom-[calc(2rem+2cm)] left-8 z-50 select-none touch-none"
         >
           <nav className="admin-gooey-menu text-white">
             <input 
