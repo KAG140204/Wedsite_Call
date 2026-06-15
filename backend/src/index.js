@@ -480,6 +480,8 @@ export class RoomSession {
     this.roomName = 'Phòng Mới';
     this.hostId = null;
     this.messages = []; // Lưu trữ chat tạm thời trong RAM
+    this.polls = []; // Lưu trữ cuộc khảo sát tạm thời trong RAM
+    this.questions = []; // Lưu trữ câu hỏi tạm thời trong RAM
   }
 
   async fetch(request) {
@@ -537,8 +539,10 @@ export class RoomSession {
     webSocket.accept();
     this.sessions.set(webSocket, userData);
 
-    // Gửi lịch sử chat cho người mới vào
+    // Gửi lịch sử chat, khảo sát, và Q&A cho người mới vào
     webSocket.send(JSON.stringify({ type: 'chat_history', messages: this.messages }));
+    webSocket.send(JSON.stringify({ type: 'poll_history', polls: this.polls }));
+    webSocket.send(JSON.stringify({ type: 'qa_history', questions: this.questions }));
 
     this.broadcast({ type: 'user_joined', user: userData, participants: Array.from(this.sessions.values()) });
 
@@ -606,12 +610,65 @@ export class RoomSession {
             userName: userData.name
           });
         }
-        else if (data.type === 'poll_create' || data.type === 'poll_vote') {
-          // Broadcast khảo sát cho tất cả mọi người
+        else if (data.type === 'poll_create') {
+          this.polls.push(data.poll);
           this.broadcast({ ...data, userId: userData.id, userName: userData.name });
         }
-        else if (data.type === 'qa_ask' || data.type === 'qa_upvote' || data.type === 'qa_highlight' || data.type === 'qa_resolve') {
-          // Broadcast Q&A cho tất cả mọi người
+        else if (data.type === 'poll_vote') {
+          this.polls = this.polls.map(p => {
+            if (p.id === data.pollId) {
+              return {
+                ...p,
+                options: p.options.map((opt, idx) => {
+                  if (idx === data.optionIndex) {
+                    const voted = opt.votes.includes(userData.id);
+                    const newVotes = voted 
+                      ? opt.votes.filter(id => id !== userData.id) 
+                      : [...opt.votes, userData.id];
+                    return { ...opt, votes: newVotes };
+                  } else {
+                    return { ...opt, votes: opt.votes.filter(id => id !== userData.id) };
+                  }
+                })
+              };
+            }
+            return p;
+          });
+          this.broadcast({ ...data, voterId: userData.id, userId: userData.id, userName: userData.name });
+        }
+        else if (data.type === 'qa_ask') {
+          this.questions.push(data.question);
+          this.broadcast({ ...data, userId: userData.id, userName: userData.name });
+        }
+        else if (data.type === 'qa_upvote') {
+          this.questions = this.questions.map(q => {
+            if (q.id === data.questionId) {
+              const upvoted = q.upvotes.includes(userData.id);
+              const newUpvotes = upvoted 
+                ? q.upvotes.filter(id => id !== userData.id) 
+                : [...q.upvotes, userData.id];
+              return { ...q, upvotes: newUpvotes };
+            }
+            return q;
+          });
+          this.broadcast({ ...data, voterId: userData.id, userId: userData.id, userName: userData.name });
+        }
+        else if (data.type === 'qa_highlight') {
+          this.questions = this.questions.map(q => {
+            if (data.question && q.id === data.question.id) {
+              return { ...q, isHighlighted: true };
+            }
+            return { ...q, isHighlighted: false };
+          });
+          this.broadcast({ ...data, userId: userData.id, userName: userData.name });
+        }
+        else if (data.type === 'qa_resolve') {
+          this.questions = this.questions.map(q => {
+            if (q.id === data.questionId) {
+              return { ...q, isResolved: data.isResolved };
+            }
+            return q;
+          });
           this.broadcast({ ...data, userId: userData.id, userName: userData.name });
         }
       } catch (err) {

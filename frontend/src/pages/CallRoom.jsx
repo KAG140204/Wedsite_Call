@@ -843,6 +843,16 @@ export default function CallRoom() {
           case 'chat_history':
             setMessages(data.messages || []);
             break;
+          case 'poll_history':
+            setPolls(data.polls || []);
+            break;
+          case 'qa_history':
+            setQuestions(data.questions || []);
+            const highlighted = (data.questions || []).find(q => q.isHighlighted);
+            if (highlighted) {
+              setHighlightedQuestion(highlighted);
+            }
+            break;
           case 'chat_message':
             setMessages(prev => [...prev, data.message]);
             // Tăng số thông báo nếu đang đóng chat và tin nhắn không phải của mình
