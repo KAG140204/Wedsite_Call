@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check, Settings, Volume2, Wifi } from 'lucide-react';
+import { Video as VideoIcon, Mic, MicOff, VideoOff, PhoneOff, MonitorUp, MessageSquare, Users, Edit2, UserMinus, Send, X, Copy, Check, Settings, Volume2, Wifi, Palette, Smile, Sparkles, Pin, PinOff, BarChart2, HelpCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Peer from 'peerjs';
 import { API_BASE_URL, WS_BASE_URL } from '../config';
+import { gsap } from 'gsap';
 
 // Component hiển thị Video Stream
 const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
@@ -321,6 +322,60 @@ export default function CallRoom() {
 
   // --- DEVICE SETTINGS STATE ---
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'default');
+  const [isEmojiPanelOpen, setIsEmojiPanelOpen] = useState(false);
+  const [noiseSuppressionOn, setNoiseSuppressionOn] = useState(false);
+  const [pinnedUserId, setPinnedUserId] = useState(null); // 'local' hoặc id của remote user
+  const noiseAudioCtxRef = useRef(null); // AudioContext cho bộ lọc tạp âm
+  
+  // --- INTERACTIVE SIDEBAR STATE (CHAT, POLLS, Q&A) ---
+  const [sidebarTab, setSidebarTab] = useState('chat'); // 'chat' | 'polls' | 'qa'
+  const [polls, setPolls] = useState([]);
+  const [newPollQuestion, setNewPollQuestion] = useState('');
+  const [newPollOptions, setNewPollOptions] = useState(['', '']);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  
+  const [questions, setQuestions] = useState([]);
+  const [newQuestionText, setNewQuestionText] = useState('');
+  const [highlightedQuestion, setHighlightedQuestion] = useState(null); // Trạng thái câu hỏi đang được ghim lên màn hình chiếu
+  
+  // --- VIRTUAL BACKGROUND STATE & REFS ---
+  const [virtualBg, setVirtualBg] = useState('none'); // 'none' | 'blur' | 'image'
+  const [selectedBgImage, setSelectedBgImage] = useState('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=640&auto=format&fit=crop');
+  const [isVirtualBgLoading, setIsVirtualBgLoading] = useState(false);
+  const virtualBgRef = useRef('none');
+  const selectedBgImageRef = useRef('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=640&auto=format&fit=crop');
+  const segVideoRef = useRef(null);
+  const segCanvasRef = useRef(null);
+  const rawVideoStreamRef = useRef(null); // Lưu stream webcam thô để làm đầu vào xử lý
+  const selfieSegRef = useRef(null);
+  const bgImgElementRef = useRef(null);
+  
+  useEffect(() => {
+    if (theme === 'default') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
+    virtualBgRef.current = virtualBg;
+  }, [virtualBg]);
+
+  useEffect(() => {
+    selectedBgImageRef.current = selectedBgImage;
+    if (selectedBgImage) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = selectedBgImage;
+      img.onload = () => {
+        bgImgElementRef.current = img;
+      };
+    }
+  }, [selectedBgImage]);
+
   const [audioInputs, setAudioInputs] = useState([]);
   const [videoInputs, setVideoInputs] = useState([]);
   const [audioOutputs, setAudioOutputs] = useState([]);
@@ -798,6 +853,67 @@ export default function CallRoom() {
               return currentIsOpen;
             });
             break;
+          case 'emoji_reaction':
+            showEmojiBubble(data.senderId, data.emoji);
+            break;
+          // --- POLL EVENTS ---
+          case 'poll_create':
+            setPolls(prev => [...prev, data.poll]);
+            break;
+          case 'poll_vote':
+            setPolls(prev => prev.map(p => {
+              if (p.id === data.pollId) {
+                return {
+                  ...p,
+                  options: p.options.map((opt, idx) => {
+                    if (idx === data.optionIndex) {
+                      const voted = opt.votes.includes(data.voterId);
+                      const newVotes = voted 
+                        ? opt.votes.filter(id => id !== data.voterId) 
+                        : [...opt.votes, data.voterId];
+                      return { ...opt, votes: newVotes };
+                    } else {
+                      return { ...opt, votes: opt.votes.filter(id => id !== data.voterId) };
+                    }
+                  })
+                };
+              }
+              return p;
+            }));
+            break;
+          // --- Q&A EVENTS ---
+          case 'qa_ask':
+            setQuestions(prev => [data.question, ...prev]);
+            break;
+          case 'qa_upvote':
+            setQuestions(prev => prev.map(q => {
+              if (q.id === data.questionId) {
+                const upvoted = q.upvotes.includes(data.voterId);
+                const newUpvotes = upvoted 
+                  ? q.upvotes.filter(id => id !== data.voterId) 
+                  : [...q.upvotes, data.voterId];
+                return { ...q, upvotes: newUpvotes };
+              }
+              return q;
+            }));
+            break;
+          case 'qa_highlight':
+            setHighlightedQuestion(data.question);
+            break;
+          case 'qa_resolve':
+            setQuestions(prev => prev.map(q => {
+              if (q.id === data.questionId) {
+                return { ...q, isResolved: data.isResolved };
+              }
+              return q;
+            }));
+            setHighlightedQuestion(prev => {
+              if (prev && prev.id === data.questionId && data.isResolved) {
+                return null;
+              }
+              return prev;
+            });
+            break;
           default:
             break;
         }
@@ -882,7 +998,190 @@ export default function CallRoom() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [videoOn, isScreenSharing]);
 
+  // --- AI NOISE SUPPRESSION & VOICE ENHANCEMENT ---
+  const toggleNoiseFilter = async (enable) => {
+    setNoiseSuppressionOn(enable);
+    if (!localStreamRef.current || !micOn) return;
+
+    if (enable) {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContextClass();
+        noiseAudioCtxRef.current = ctx;
+
+        const source = ctx.createMediaStreamSource(localStreamRef.current);
+
+        // High-pass filter: Cắt tần số dưới 85Hz (loại bỏ tiếng ù, tiếng quạt, tiếng AC)
+        const highpass = ctx.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.value = 85;
+        highpass.Q.value = 0.7;
+
+        // Low-pass filter: Cắt tần số trên 14kHz (loại bỏ tiếng rít, nhiễu cao tần)
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 14000;
+        lowpass.Q.value = 0.7;
+
+        // Dynamics Compressor: Nén dải động giúp chuẩn hóa âm lượng giọng nói
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-36, ctx.currentTime);
+        compressor.knee.setValueAtTime(12, ctx.currentTime);
+        compressor.ratio.setValueAtTime(4, ctx.currentTime);
+        compressor.attack.setValueAtTime(0.05, ctx.currentTime);
+        compressor.release.setValueAtTime(0.25, ctx.currentTime);
+
+        // Gain: Tăng âm lượng sau khi nén
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(1.4, ctx.currentTime);
+
+        const destination = ctx.createMediaStreamDestination();
+
+        // Chain: source → highpass → lowpass → compressor → gain → destination
+        source.connect(highpass);
+        highpass.connect(lowpass);
+        lowpass.connect(compressor);
+        compressor.connect(gain);
+        gain.connect(destination);
+
+        const processedTrack = destination.stream.getAudioTracks()[0];
+
+        // Thay thế audio track trong localStream
+        const oldTrack = localStreamRef.current.getAudioTracks()[0];
+        if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+        localStreamRef.current.addTrack(processedTrack);
+
+        // Cập nhật track cho tất cả peer connections
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                  if (sender) sender.replaceTrack(processedTrack);
+                }
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Lỗi khởi tạo bộ lọc tạp âm:', err);
+        setNoiseSuppressionOn(false);
+      }
+    } else {
+      // Tắt bộ lọc: Lấy lại audio track gốc từ thiết bị
+      if (noiseAudioCtxRef.current) {
+        noiseAudioCtxRef.current.close().catch(console.error);
+        noiseAudioCtxRef.current = null;
+      }
+      try {
+        const constraints = {
+          audio: selectedMic
+            ? { deviceId: { exact: selectedMic }, echoCancellation: true, noiseSuppression: false, autoGainControl: true }
+            : { echoCancellation: true, noiseSuppression: false, autoGainControl: true }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const rawTrack = stream.getAudioTracks()[0];
+
+        const oldTrack = localStreamRef.current.getAudioTracks()[0];
+        if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
+        localStreamRef.current.addTrack(rawTrack);
+
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'audio');
+                  if (sender) sender.replaceTrack(rawTrack);
+                }
+              });
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Lỗi khôi phục audio gốc:', err);
+      }
+    }
+  };
+
+  const showEmojiBubble = (senderId, emoji) => {
+    const container = document.getElementById(senderId === 'local' ? 'video-local' : `video-${senderId}`);
+    if (!container) return;
+
+    const emojiEl = document.createElement('div');
+    emojiEl.innerText = emoji;
+    emojiEl.className = 'absolute bottom-12 left-1/2 -translate-x-1/2 text-4xl pointer-events-none select-none z-30 filter drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]';
+    container.appendChild(emojiEl);
+
+    gsap.fromTo(emojiEl, 
+      { 
+        y: 0, 
+        x: 0,
+        opacity: 0, 
+        scale: 0.3,
+        rotation: 0
+      }, 
+      { 
+        y: -120 - Math.random() * 80, 
+        x: (Math.random() - 0.5) * 100, 
+        opacity: 1, 
+        scale: 1.6, 
+        rotation: (Math.random() - 0.5) * 45,
+        duration: 1.0, 
+        ease: 'back.out(1.7)',
+        onComplete: () => {
+          gsap.to(emojiEl, {
+            y: '-=40',
+            opacity: 0,
+            scale: 0.9,
+            duration: 0.4,
+            ease: 'power1.in',
+            onComplete: () => {
+              emojiEl.remove();
+            }
+          });
+        }
+      }
+    );
+  };
+
+  const sendEmojiReaction = (emoji) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'emoji_reaction',
+        emoji,
+        senderId: user.id,
+        senderName: user.name
+      }));
+    }
+    showEmojiBubble('local', emoji);
+    setIsEmojiPanelOpen(false);
+  };
+
   const handleLeave = () => {
+    // Dọn dẹp tài nguyên AI Virtual Background
+    if (rawVideoStreamRef.current) {
+      rawVideoStreamRef.current.getTracks().forEach(t => t.stop());
+      rawVideoStreamRef.current = null;
+    }
+    if (segVideoRef.current) {
+      segVideoRef.current.srcObject = null;
+      segVideoRef.current.remove();
+      segVideoRef.current = null;
+    }
+    if (segCanvasRef.current) {
+      segCanvasRef.current.remove();
+      segCanvasRef.current = null;
+    }
+    if (selfieSegRef.current) {
+      selfieSegRef.current.close?.();
+      selfieSegRef.current = null;
+    }
     navigate('/home');
   };
 
@@ -990,13 +1289,192 @@ export default function CallRoom() {
     }
   };
 
+  // --- AI VIRTUAL BACKGROUND ENGINE ---
+  
+  const loadSelfieSegmentation = () => {
+    return new Promise((resolve, reject) => {
+      if (window.SelfieSegmentation) {
+        resolve(window.SelfieSegmentation);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js';
+      script.async = true;
+      script.onload = () => {
+        if (window.SelfieSegmentation) {
+          resolve(window.SelfieSegmentation);
+        } else {
+          reject(new Error('SelfieSegmentation not found on window'));
+        }
+      };
+      script.onerror = () => reject(new Error('Failed to load SelfieSegmentation script'));
+      document.head.appendChild(script);
+    });
+  };
+
+  const startBackgroundProcessor = async (rawStream) => {
+    try {
+      setIsVirtualBgLoading(true);
+      const SelfieSegmentationClass = await loadSelfieSegmentation();
+      
+      if (!segVideoRef.current) {
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.style.display = 'none';
+        document.body.appendChild(video);
+        segVideoRef.current = video;
+      }
+      
+      if (!segCanvasRef.current) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        canvas.style.display = 'none';
+        document.body.appendChild(canvas);
+        segCanvasRef.current = canvas;
+      }
+
+      const video = segVideoRef.current;
+      const canvas = segCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+
+      video.srcObject = rawStream;
+      await video.play();
+
+      if (!selfieSegRef.current) {
+        const selfieSegmentation = new SelfieSegmentationClass({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+        });
+        selfieSegmentation.setOptions({
+          modelSelection: 1,
+        });
+        selfieSegmentation.onResults((results) => {
+          if (!canvas || !ctx) return;
+          const width = canvas.width;
+          const height = canvas.height;
+
+          ctx.save();
+          ctx.clearRect(0, 0, width, height);
+
+          ctx.drawImage(results.segmentationMask, 0, 0, width, height);
+
+          ctx.globalCompositeOperation = 'source-in';
+          ctx.drawImage(results.image, 0, 0, width, height);
+
+          ctx.globalCompositeOperation = 'destination-over';
+          
+          const currentEffect = virtualBgRef.current;
+          if (currentEffect === 'blur') {
+            ctx.filter = 'blur(10px)';
+            ctx.drawImage(results.image, 0, 0, width, height);
+            ctx.filter = 'none';
+          } else if (currentEffect === 'image' && bgImgElementRef.current) {
+            ctx.drawImage(bgImgElementRef.current, 0, 0, width, height);
+          } else {
+            ctx.drawImage(results.image, 0, 0, width, height);
+          }
+          ctx.restore();
+        });
+        selfieSegRef.current = selfieSegmentation;
+      }
+
+      let active = true;
+      const processFrame = async () => {
+        if (!active) return;
+        if (virtualBgRef.current !== 'none' && video.readyState === video.HAVE_ENOUGH_DATA) {
+          try {
+            await selfieSegRef.current.send({ image: video });
+          } catch (e) {
+            console.warn("Lỗi xử lý frame MediaPipe:", e);
+          }
+        }
+        if (video.requestVideoFrameCallback) {
+          video.requestVideoFrameCallback(processFrame);
+        } else {
+          requestAnimationFrame(processFrame);
+        }
+      };
+
+      if (video.requestVideoFrameCallback) {
+        video.requestVideoFrameCallback(processFrame);
+      } else {
+        requestAnimationFrame(processFrame);
+      }
+
+      const canvasStream = canvas.captureStream(30);
+      setIsVirtualBgLoading(false);
+      return canvasStream;
+    } catch (err) {
+      console.error("Lỗi khởi tạo bộ lọc nền AI:", err);
+      setIsVirtualBgLoading(false);
+      return rawStream;
+    }
+  };
+
+  const handleUpdateBackgroundEffect = async (effect, imageSrc = null) => {
+    if (!videoOn) {
+      setVirtualBg(effect);
+      if (imageSrc) setSelectedBgImage(imageSrc);
+      return;
+    }
+
+    try {
+      const oldBg = virtualBgRef.current;
+      setVirtualBg(effect);
+      if (imageSrc) setSelectedBgImage(imageSrc);
+
+      let targetVideoTrack = null;
+
+      if (effect === 'none') {
+        if (rawVideoStreamRef.current) {
+          targetVideoTrack = rawVideoStreamRef.current.getVideoTracks()[0];
+        }
+      } else {
+        if (oldBg === 'none') {
+          if (rawVideoStreamRef.current) {
+            const processedStream = await startBackgroundProcessor(rawVideoStreamRef.current);
+            targetVideoTrack = processedStream.getVideoTracks()[0];
+          }
+        } else {
+          return;
+        }
+      }
+
+      if (targetVideoTrack && localStreamRef.current) {
+        const currentVideoTrack = localStreamRef.current.getVideoTracks()[0];
+        if (currentVideoTrack) {
+          localStreamRef.current.removeTrack(currentVideoTrack);
+          localStreamRef.current.addTrack(targetVideoTrack);
+        }
+
+        if (peerRef.current) {
+          Object.keys(peerRef.current.connections).forEach(peerId => {
+            const connList = peerRef.current.connections[peerId];
+            if (connList) {
+              connList.forEach(conn => {
+                if (conn.peerConnection) {
+                  const senders = conn.peerConnection.getSenders();
+                  const sender = senders.find(s => s.track && s.track.kind === 'video');
+                  if (sender) sender.replaceTrack(targetVideoTrack);
+                }
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Lỗi cập nhật hiệu ứng nền:", e);
+    }
+  };
+
   const toggleVideo = async () => {
     if (videoOn) {
       if (localStreamRef.current) {
         const track = localStreamRef.current.getVideoTracks()[0];
-        if (track) track.stop(); // Tắt hoàn toàn camera (đèn cam tắt)
+        if (track) track.stop();
         
-        // Thay thế bằng Black Video Track giả đã tạo sẵn để giữ transceiver WebRTC sống
         const blackVideoTrack = emptyStreamRef.current?.getVideoTracks()[0];
         if (blackVideoTrack) {
           localStreamRef.current.removeTrack(track);
@@ -1018,6 +1496,10 @@ export default function CallRoom() {
           }
         }
       }
+      if (rawVideoStreamRef.current) {
+        rawVideoStreamRef.current.getVideoTracks().forEach(t => t.stop());
+        rawVideoStreamRef.current = null;
+      }
       setVideoOn(false);
       videoOnRef.current = false;
       broadcastMediaState();
@@ -1025,8 +1507,15 @@ export default function CallRoom() {
       try {
         const constraints = selectedCam ? { video: { deviceId: { exact: selectedCam } } } : { video: true };
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        const newTrack = stream.getVideoTracks()[0];
+        rawVideoStreamRef.current = stream;
         
+        let newTrack = stream.getVideoTracks()[0];
+        
+        if (virtualBg !== 'none') {
+          const processedStream = await startBackgroundProcessor(stream);
+          newTrack = processedStream.getVideoTracks()[0];
+        }
+
         if (localStreamRef.current) {
           const oldTrack = localStreamRef.current.getVideoTracks()[0];
           if (oldTrack) localStreamRef.current.removeTrack(oldTrack);
@@ -1115,6 +1604,92 @@ export default function CallRoom() {
     }
   };
 
+  // --- POLL HELPER FUNCTIONS ---
+  const handleCreatePoll = (question, optionsList) => {
+    if (!question.trim() || !wsRef.current) return;
+    const validOptions = optionsList.filter(opt => opt.trim() !== '');
+    if (validOptions.length < 2) return;
+
+    const newPoll = {
+      id: crypto.randomUUID(),
+      question: question.trim(),
+      options: validOptions.map(opt => ({ text: opt.trim(), votes: [] })),
+      creatorId: user.id,
+      creatorName: user.name,
+      isActive: true,
+      timestamp: new Date().toISOString()
+    };
+
+    wsRef.current.send(JSON.stringify({
+      type: 'poll_create',
+      poll: newPoll
+    }));
+
+    setNewPollQuestion('');
+    setNewPollOptions(['', '']);
+    setShowPollCreator(false);
+  };
+
+  const handleVotePoll = (pollId, optionIndex) => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'poll_vote',
+      pollId,
+      optionIndex,
+      voterId: user.id
+    }));
+  };
+
+  // --- Q&A HELPER FUNCTIONS ---
+  const handleAskQuestion = (text) => {
+    if (!text.trim() || !wsRef.current) return;
+
+    const newQuestion = {
+      id: crypto.randomUUID(),
+      text: text.trim(),
+      authorId: user.id,
+      authorName: user.name,
+      upvotes: [],
+      isHighlighted: false,
+      isResolved: false,
+      timestamp: new Date().toISOString()
+    };
+
+    wsRef.current.send(JSON.stringify({
+      type: 'qa_ask',
+      question: newQuestion
+    }));
+
+    setNewQuestionText('');
+  };
+
+  const handleUpvoteQuestion = (questionId) => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'qa_upvote',
+      questionId,
+      voterId: user.id
+    }));
+  };
+
+  const handleHighlightQuestion = (question) => {
+    if (!wsRef.current) return;
+    const nextQuestion = highlightedQuestion?.id === question.id ? null : question;
+    wsRef.current.send(JSON.stringify({
+      type: 'qa_highlight',
+      question: nextQuestion
+    }));
+  };
+
+  const handleResolveQuestion = (questionId, currentStatus) => {
+    if (!wsRef.current) return;
+    wsRef.current.send(JSON.stringify({
+      type: 'qa_resolve',
+      questionId,
+      isResolved: !currentStatus
+    }));
+  };
+
   const sendMessage = (e) => {
     e.preventDefault();
     if (!chatInput.trim() || !wsRef.current) return;
@@ -1129,8 +1704,8 @@ export default function CallRoom() {
   
   // Logic tính toán kích thước khung video bằng Flexbox + Aspect Ratio (16:9)
   let itemClass = 'w-full max-w-5xl'; // 1 người: chiếm giữa màn hình, giới hạn max-width
-  if (screenSharerName) {
-    itemClass = 'w-32 sm:w-44 md:w-56 aspect-video';
+  if (screenSharerName || pinnedUserId) {
+    itemClass = 'w-32 sm:w-44 md:w-56 aspect-video shrink-0';
   } else if (totalUsers === 2) {
     itemClass = 'w-full md:w-[calc(50%-0.5rem)] max-w-4xl'; // 2 người: mobile xếp dọc, desktop xếp ngang
   } else if (totalUsers >= 3 && totalUsers <= 4) {
@@ -1205,6 +1780,29 @@ export default function CallRoom() {
         {/* Main Video Area */}
         <main className={`flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center relative z-10 transition-all duration-300 ${isChatOpen ? 'pr-4 md:pr-0' : ''}`}>
           
+          {/* Q&A Highlight Banner Overlay */}
+          {highlightedQuestion && (
+            <div className="w-full max-w-2xl bg-gradient-to-r from-purple-900/95 via-indigo-900/95 to-blue-900/95 border border-purple-500/50 rounded-2xl p-4 shadow-[0_0_30px_rgba(168,85,247,0.3)] mb-4 animate-in slide-in-from-top-4 duration-300 relative z-20 flex items-start gap-3.5">
+              <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 shrink-0">
+                <HelpCircle className="w-6 h-6 animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] text-purple-300 uppercase font-bold tracking-wider mb-0.5">Câu hỏi đang thảo luận</div>
+                <p className="text-white text-base font-semibold leading-relaxed break-words">{highlightedQuestion.text}</p>
+                <div className="text-xs text-gray-400 mt-2 font-medium">Đặt bởi: <span className="text-purple-300 font-semibold">{highlightedQuestion.authorName}</span></div>
+              </div>
+              {isHost && (
+                <button 
+                  onClick={() => handleHighlightQuestion(highlightedQuestion)} 
+                  className="p-1 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors"
+                  title="Ẩn ghim câu hỏi"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+          
           {/* Dành riêng cho màn chiếu Screen Share */}
           {screenSharerName && (screenStreamRef.current || remoteScreenStream) && (
             <div className="w-full max-w-6xl aspect-video rounded-2xl overflow-hidden bg-black/90 border border-purple-500/30 shadow-2xl relative mb-4">
@@ -1221,41 +1819,106 @@ export default function CallRoom() {
             </div>
           )}
 
-          <div className="w-full max-w-7xl flex flex-wrap items-center justify-center gap-4">
-            
-            {/* Self Video */}
-            <div className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${speakingUsers['local'] ? 'speaking-ring-glow' : ''}`}>
-              {localStreamRef.current && videoOn ? (
-                <VideoPlayer stream={localStreamRef.current} isLocal={true} sinkId={selectedSpeaker} />
+          {/* Cinema Mode Pinned User Area */}
+          {pinnedUserId && !screenSharerName && (
+            <div className="w-full max-w-6xl aspect-video rounded-2xl overflow-hidden bg-black/90 border border-blue-500/30 shadow-2xl relative mb-4 group">
+              {pinnedUserId === 'local' ? (
+                localStreamRef.current && videoOn ? (
+                  <VideoPlayer stream={localStreamRef.current} isLocal={true} sinkId={selectedSpeaker} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl sm:text-5xl font-bold shadow-inner">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+                )
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                </div>
+                (() => {
+                  const p = participants.find(part => part.id === pinnedUserId);
+                  if (!p) return null;
+                  const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
+                  const stream = remoteStreams[p.id];
+                  return (
+                    <>
+                      {stream && pMedia.videoOn ? (
+                        <VideoPlayer stream={stream} isMuted={true} isLocal={false} sinkId={selectedSpeaker} micOn={pMedia.micOn} videoOn={pMedia.videoOn} />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                          <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gradient-to-br from-indigo-900 to-purple-900 flex items-center justify-center text-4xl sm:text-5xl font-bold text-indigo-200">
+                            {p.name.charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+                      )}
+                      {stream && <RemoteAudio stream={stream} sinkId={selectedSpeaker} />}
+                    </>
+                  );
+                })()
               )}
+
+              <div className="absolute top-4 right-4 z-20">
+                <button 
+                  onClick={() => setPinnedUserId(null)} 
+                  className="p-2 bg-black/60 hover:bg-black/80 rounded-full text-blue-400 hover:text-white transition-colors border border-white/10"
+                  title="Bỏ ghim"
+                >
+                  <PinOff className="w-5 h-5" />
+                </button>
+              </div>
+
               <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
-                <span>Bạn</span> {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
-                {!micOn && <MicOff className="w-3 h-3 text-red-400" />}
-                
-                {/* Sóng âm thanh động khi đang nói */}
-                {speakingUsers['local'] && (
-                  <div className="flex items-end gap-0.5 h-3.5 w-3 ml-1" title="Đang nói">
-                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-1" style={{ height: '100%' }}></div>
-                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-2" style={{ height: '70%' }}></div>
-                    <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-3" style={{ height: '85%' }}></div>
-                  </div>
-                )}
+                <span>Ghim: {pinnedUserId === 'local' ? 'Bạn' : (participants.find(p => p.id === pinnedUserId)?.name || '')}</span>
               </div>
             </div>
+          )}
+
+          <div className={`w-full max-w-7xl gap-4 ${screenSharerName || pinnedUserId ? 'flex items-center justify-start overflow-x-auto py-2 px-1 scrollbar-thin' : 'flex flex-wrap items-center justify-center'}`}>
+            
+            {/* Self Video */}
+            {(!pinnedUserId || pinnedUserId !== 'local' || screenSharerName) && (
+              <div id="video-local" className={`relative group rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${speakingUsers['local'] ? 'speaking-ring-glow' : ''}`}>
+                {localStreamRef.current && videoOn ? (
+                  <VideoPlayer stream={localStreamRef.current} isLocal={true} sinkId={selectedSpeaker} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-4xl font-bold shadow-inner">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+                )}
+                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 border border-white/10 z-10">
+                  <span>Bạn</span> {isHost && <span className="text-yellow-400 text-xs ml-1">👑 Host</span>}
+                  {!micOn && <MicOff className="w-3 h-3 text-red-400" />}
+                  
+                  {/* Sóng âm thanh động khi đang nói */}
+                  {speakingUsers['local'] && (
+                    <div className="flex items-end gap-0.5 h-3.5 w-3 ml-1" title="Đang nói">
+                      <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-1" style={{ height: '100%' }}></div>
+                      <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-2" style={{ height: '70%' }}></div>
+                      <div className="w-0.5 bg-purple-400 rounded-full voice-wave-bar-3" style={{ height: '85%' }}></div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pin button overlay for local user */}
+                <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button 
+                    onClick={() => setPinnedUserId('local')}
+                    className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/10"
+                    title="Ghim màn hình"
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Other Participants */}
-            {participants.map((p) => {
+            {participants.filter(p => p.id !== pinnedUserId || screenSharerName).map((p) => {
               const pMedia = participantsMedia[p.id] || { micOn: false, videoOn: false };
               const isSpeaking = speakingUsers[p.id];
               const ping = userPings[p.id];
               return (
-                <div key={p.id} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${isSpeaking ? 'speaking-ring-glow' : ''}`}>
+                <div key={p.id} id={`video-${p.id}`} className={`relative rounded-2xl overflow-hidden bg-gray-800/80 border border-gray-700 shadow-xl backdrop-blur-md group aspect-video flex-shrink-0 transition-all duration-300 ${itemClass} ${isSpeaking ? 'speaking-ring-glow' : ''}`}>
                   {/* Luôn phát âm thanh của đối phương độc lập với camera qua thẻ <audio> riêng biệt */}
                   {remoteStreams[p.id] && (
                     <RemoteAudio stream={remoteStreams[p.id]} sinkId={selectedSpeaker} />
@@ -1306,17 +1969,25 @@ export default function CallRoom() {
                     )}
                   </div>
                   
-                  {isHost && (
-                    <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  {/* Pin and Kick buttons for other participants */}
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex gap-1">
+                    <button 
+                      onClick={() => setPinnedUserId(p.id)}
+                      className="p-1.5 rounded bg-black/60 hover:bg-black/80 text-white transition-colors border border-white/10"
+                      title="Ghim màn hình"
+                    >
+                      <Pin className="w-3.5 h-3.5" />
+                    </button>
+                    {isHost && (
                       <button 
                         onClick={() => handleKick(p.id)}
-                        className="bg-red-500/80 hover:bg-red-500 text-white p-2 rounded-lg backdrop-blur-md flex items-center justify-center shadow-lg transition-transform hover:scale-110"
+                        className="bg-red-500/80 hover:bg-red-500 text-white p-1.5 rounded border border-red-500/20 backdrop-blur-md flex items-center justify-center transition-transform hover:scale-110"
                         title="Đuổi người này khỏi phòng"
                       >
-                        <UserMinus className="w-4 h-4" />
+                        <UserMinus className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1324,60 +1995,301 @@ export default function CallRoom() {
           </div>
         </main>
 
-        {/* Chat Sidebar Panel */}
+        {/* Interactive Sidebar Panel */}
         {isChatOpen && (
           <aside className="fixed inset-0 md:relative md:inset-auto z-50 md:z-20 w-full md:w-80 lg:w-96 glass-panel md:border-l border-gray-800 bg-gray-950 md:bg-gray-950/30 flex flex-col h-full animate-in slide-in-from-right-8 duration-300">
-          <div className="h-14 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
-            <h3 className="font-semibold text-lg flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-blue-400" /> Trò chuyện
-            </h3>
-            <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-900/30">
-            {messages.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm text-center">
-                Chưa có tin nhắn nào.<br/>Hãy nói lời chào!
-              </div>
-            ) : (
-              messages.map((m, i) => {
-                const isMe = m.senderId === user.id;
-                return (
-                  <div key={m.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                    <span className="text-[11px] text-gray-500 mb-1 px-1">
-                      {isMe ? 'Bạn' : m.senderName} • {new Date(m.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    <div className={`px-4 py-2 rounded-2xl max-w-[85%] break-words text-sm shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-bl-sm'}`}>
-                      {m.text}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <form onSubmit={sendMessage} className="p-4 border-t border-gray-800 bg-gray-950/50 shrink-0">
-            <div className="relative flex items-center">
-              <input 
-                type="text"
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                placeholder="Nhập tin nhắn..."
-                className="w-full bg-gray-900 border border-gray-700 rounded-full pl-4 pr-12 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-              />
+            {/* Tabs Header */}
+            <div className="flex border-b border-gray-800 shrink-0">
               <button 
-                type="submit" 
-                disabled={!chatInput.trim()}
-                className="absolute right-2 p-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-full transition-colors flex items-center justify-center"
+                onClick={() => setSidebarTab('chat')} 
+                className={`flex-1 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${sidebarTab === 'chat' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
               >
-                <Send className="w-4 h-4" />
+                <MessageSquare className="w-4 h-4" /> Trò chuyện
+              </button>
+              <button 
+                onClick={() => setSidebarTab('polls')} 
+                className={`flex-1 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${sidebarTab === 'polls' ? 'border-purple-500 text-purple-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              >
+                <BarChart2 className="w-4 h-4" /> Khảo sát
+              </button>
+              <button 
+                onClick={() => setSidebarTab('qa')} 
+                className={`flex-1 py-3 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors border-b-2 ${sidebarTab === 'qa' ? 'border-pink-500 text-pink-400' : 'border-transparent text-gray-400 hover:text-gray-200'}`}
+              >
+                <HelpCircle className="w-4 h-4" /> Q&A
+              </button>
+              <button 
+                onClick={() => setIsChatOpen(false)} 
+                className="px-3 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
-          </form>
-        </aside>
+
+            {/* TAB CONTENT: CHAT */}
+            {sidebarTab === 'chat' && (
+              <>
+                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-900/30">
+                  {messages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-gray-500 text-sm text-center">
+                      Chưa có tin nhắn nào.<br/>Hãy nói lời chào!
+                    </div>
+                  ) : (
+                    messages.map((m, i) => {
+                      const isMe = m.senderId === user.id;
+                      return (
+                        <div key={m.id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                          <span className="text-[11px] text-gray-500 mb-1 px-1">
+                            {isMe ? 'Bạn' : m.senderName} • {new Date(m.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <div className={`px-4 py-2 rounded-2xl max-w-[85%] break-words text-sm shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-bl-sm'}`}>
+                            {m.text}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                <form onSubmit={sendMessage} className="p-4 border-t border-gray-800 bg-gray-950/50 shrink-0">
+                  <div className="relative flex items-center">
+                    <input 
+                      type="text"
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      placeholder="Nhập tin nhắn..."
+                      className="w-full bg-gray-900 border border-gray-700 rounded-full pl-4 pr-12 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={!chatInput.trim()}
+                      className="absolute right-2 p-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-full transition-colors flex items-center justify-center"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+
+            {/* TAB CONTENT: POLLS */}
+            {sidebarTab === 'polls' && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-gray-900/30">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  {showPollCreator ? (
+                    // Form tạo khảo sát
+                    <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-4 space-y-3 shadow-lg">
+                      <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tạo khảo sát mới</div>
+                      <div>
+                        <label className="block text-[11px] text-gray-400 mb-1">Câu hỏi khảo sát</label>
+                        <input 
+                          type="text"
+                          value={newPollQuestion}
+                          onChange={e => setNewPollQuestion(e.target.value)}
+                          placeholder="Ví dụ: Bạn thấy tính năng này thế nào?"
+                          className="w-full bg-gray-950 border border-gray-850 text-white rounded-lg px-3 py-2 text-xs placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="block text-[11px] text-gray-400">Các lựa chọn</label>
+                        {newPollOptions.map((opt, idx) => (
+                          <input 
+                            key={idx}
+                            type="text"
+                            value={opt}
+                            onChange={e => {
+                              const updated = [...newPollOptions];
+                              updated[idx] = e.target.value;
+                              setNewPollOptions(updated);
+                            }}
+                            placeholder={`Lựa chọn ${idx + 1}`}
+                            className="w-full bg-gray-950 border border-gray-850 text-white rounded-lg px-3 py-1.5 text-xs placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                          />
+                        ))}
+                        <button 
+                          type="button" 
+                          onClick={() => setNewPollOptions([...newPollOptions, ''])}
+                          className="text-[11px] text-purple-400 hover:text-purple-300 font-semibold"
+                        >
+                          + Thêm lựa chọn
+                        </button>
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button 
+                          onClick={() => setShowPollCreator(false)}
+                          className="flex-1 bg-gray-850 hover:bg-gray-850/80 text-gray-300 text-xs py-2 rounded-lg font-medium"
+                        >
+                          Hủy
+                        </button>
+                        <button 
+                          onClick={() => handleCreatePoll(newPollQuestion, newPollOptions)}
+                          disabled={!newPollQuestion.trim() || newPollOptions.filter(o => o.trim()).length < 2}
+                          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-600 text-white text-xs py-2 rounded-lg font-medium"
+                        >
+                          Tạo ngay
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // Nút mở form tạo khảo sát (Chỉ Host được tạo khảo sát)
+                    isHost && (
+                      <button 
+                        onClick={() => setShowPollCreator(true)}
+                        className="w-full bg-purple-600 hover:bg-purple-500 text-white py-2.5 rounded-xl text-xs font-semibold shadow-lg shadow-purple-950/20 transition-all hover:scale-[1.02] flex items-center justify-center gap-1.5"
+                      >
+                        + Tạo cuộc khảo sát mới
+                      </button>
+                    )
+                  )}
+
+                  {/* Danh sách khảo sát */}
+                  <div className="space-y-4">
+                    {polls.length === 0 ? (
+                      <div className="text-center text-gray-500 text-xs py-8">
+                        Chưa có cuộc khảo sát nào.
+                      </div>
+                    ) : (
+                      [...polls].reverse().map((poll) => {
+                        const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes.length, 0);
+                        return (
+                          <div key={poll.id} className="bg-gray-900/60 border border-gray-800/80 rounded-xl p-4 space-y-3">
+                            <div>
+                              <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-1">Khảo sát • Đặt bởi {poll.creatorName}</div>
+                              <h4 className="text-sm font-semibold text-white leading-snug">{poll.question}</h4>
+                            </div>
+                            <div className="space-y-2">
+                              {poll.options.map((opt, idx) => {
+                                const optionVotes = opt.votes.length;
+                                const pct = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0;
+                                const hasVoted = opt.votes.includes(user.id);
+                                return (
+                                  <button 
+                                    key={idx}
+                                    onClick={() => handleVotePoll(poll.id, idx)}
+                                    className={`w-full relative overflow-hidden rounded-lg p-2.5 text-left text-xs border transition-all ${hasVoted ? 'bg-purple-900/30 border-purple-500/50 text-white' : 'bg-gray-950 border-gray-850 hover:bg-gray-950/70 text-gray-300'}`}
+                                  >
+                                    <div 
+                                      className="absolute inset-y-0 left-0 bg-purple-500/10 transition-all duration-300 pointer-events-none"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                    <div className="relative z-10 flex justify-between items-center font-medium">
+                                      <span className="truncate pr-4">{opt.text}</span>
+                                      <span className="shrink-0 font-mono text-[11px] text-purple-400">{optionVotes} phiếu ({pct}%)</span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="text-[10px] text-gray-500 text-right">Tổng số lượt bình chọn: {totalVotes}</div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: Q&A */}
+            {sidebarTab === 'qa' && (
+              <div className="flex-1 flex flex-col overflow-hidden bg-gray-900/30">
+                <div className="p-3 border-b border-gray-800 bg-gray-950/20 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text"
+                      value={newQuestionText}
+                      onChange={e => setNewQuestionText(e.target.value)}
+                      placeholder="Đặt câu hỏi của bạn..."
+                      className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-pink-500"
+                      onKeyDown={e => e.key === 'Enter' && handleAskQuestion(newQuestionText)}
+                    />
+                    <button 
+                      onClick={() => handleAskQuestion(newQuestionText)}
+                      disabled={!newQuestionText.trim()}
+                      className="bg-pink-600 hover:bg-pink-500 disabled:bg-gray-800 disabled:text-gray-600 text-white text-xs px-3 py-2 rounded-lg font-semibold transition-colors"
+                    >
+                      Hỏi
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {questions.length === 0 ? (
+                    <div className="text-center text-gray-500 text-xs py-8">
+                      Chưa có câu hỏi nào.<br/>Hãy là người đầu tiên đặt câu hỏi!
+                    </div>
+                  ) : (
+                    [...questions]
+                      .sort((a, b) => {
+                        if (a.isResolved !== b.isResolved) return a.isResolved ? 1 : -1;
+                        return b.upvotes.length - a.upvotes.length;
+                      })
+                      .map((q) => {
+                        const hasUpvoted = q.upvotes.includes(user.id);
+                        const isHighlighted = highlightedQuestion?.id === q.id;
+                        return (
+                          <div 
+                            key={q.id} 
+                            className={`border rounded-xl p-3.5 space-y-2 transition-all ${
+                              q.isResolved 
+                                ? 'bg-gray-950/20 border-gray-850 opacity-60' 
+                                : isHighlighted 
+                                  ? 'bg-pink-950/20 border-pink-500/50 shadow-md shadow-pink-950/10' 
+                                  : 'bg-gray-900/60 border-gray-800'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <div>
+                                <span className="text-[10px] text-gray-500 font-medium">{q.authorName} • {new Date(q.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+                                <p className={`text-xs font-semibold leading-relaxed break-words mt-1 ${q.isResolved ? 'line-through text-gray-500' : 'text-white'}`}>{q.text}</p>
+                              </div>
+                              <button 
+                                onClick={() => handleUpvoteQuestion(q.id)}
+                                disabled={q.isResolved}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-bold font-mono transition-colors ${
+                                  hasUpvoted 
+                                    ? 'bg-pink-500/10 border-pink-500/30 text-pink-400' 
+                                    : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-gray-200'
+                                }`}
+                              >
+                                ▲ {q.upvotes.length}
+                              </button>
+                            </div>
+
+                            {isHost && (
+                              <div className="flex justify-end gap-2 pt-2 border-t border-gray-800/50">
+                                <button 
+                                  onClick={() => handleHighlightQuestion(q)}
+                                  disabled={q.isResolved}
+                                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-colors ${
+                                    isHighlighted 
+                                      ? 'bg-pink-600 border-pink-500 text-white' 
+                                      : 'bg-transparent border-gray-700 text-gray-400 hover:text-gray-200 hover:bg-gray-850'
+                                  }`}
+                                >
+                                  {isHighlighted ? 'Đang ghim chiếu' : 'Ghim chiếu'}
+                                </button>
+                                <button 
+                                  onClick={() => handleResolveQuestion(q.id, q.isResolved)}
+                                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold border transition-colors ${
+                                    q.isResolved 
+                                      ? 'bg-emerald-600 border-emerald-500 text-white' 
+                                      : 'bg-transparent border-gray-700 text-gray-400 hover:text-gray-200 hover:bg-gray-850'
+                                  }`}
+                                >
+                                  {q.isResolved ? 'Mở lại câu hỏi' : 'Đã giải quyết'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+              </div>
+            )}
+          </aside>
         )}
       </div>
 
@@ -1408,6 +2320,30 @@ export default function CallRoom() {
         <button onClick={toggleScreenShare} className={`hidden sm:flex w-9 h-9 sm:w-11 sm:h-11 rounded-full items-center justify-center transition-all shadow-md ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-800'}`} title="Chia sẻ màn hình">
           <MonitorUp className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
         </button>
+        
+        {/* Emoji Reactions Button */}
+        <div className="relative">
+          <button 
+            onClick={() => setIsEmojiPanelOpen(!isEmojiPanelOpen)} 
+            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all shadow-md ${isEmojiPanelOpen ? 'bg-yellow-500 text-white hover:bg-yellow-400' : 'glass-button hover:bg-gray-800'}`}
+            title="Phản hồi cảm xúc"
+          >
+            <Smile className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
+          </button>
+          {isEmojiPanelOpen && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 flex items-center gap-1 bg-gray-900/95 backdrop-blur-xl border border-gray-700 rounded-2xl px-3 py-2 shadow-2xl animate-in zoom-in-95 duration-150">
+              {['👍', '🎉', '❤️', '😮', '😂', '👏'].map(emoji => (
+                <button 
+                  key={emoji} 
+                  onClick={() => sendEmojiReaction(emoji)}
+                  className="text-2xl hover:scale-150 transition-transform duration-150 p-1 rounded-lg hover:bg-white/10 cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         
         <div className="w-px h-6 bg-gray-800 mx-0.5 sm:mx-1"></div>
         
@@ -1491,6 +2427,26 @@ export default function CallRoom() {
                 </div>
               </div>
 
+              {/* Lọc tiếng ồn thông minh (Noise Suppression) */}
+              <div className="flex items-center justify-between bg-gray-950/40 p-3 rounded-lg border border-gray-800/50">
+                <div className="flex items-center gap-2">
+                  <Sparkles className={`w-4 h-4 ${noiseSuppressionOn ? 'text-purple-400 animate-pulse' : 'text-gray-400'}`} />
+                  <div>
+                    <div className="text-xs font-semibold text-white">Lọc tiếng ồn AI</div>
+                    <div className="text-[10px] text-gray-400">Loại bỏ tạp âm & cải thiện giọng nói</div>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={noiseSuppressionOn}
+                    onChange={e => toggleNoiseFilter(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
               {/* Chọn Camera */}
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -1511,6 +2467,80 @@ export default function CallRoom() {
                 </select>
               </div>
 
+              {/* Ảnh nền ảo & Làm mờ nền AI */}
+              <div className="bg-gray-950/40 p-3 rounded-lg border border-gray-800/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-indigo-400" />
+                    <div>
+                      <div className="text-xs font-semibold text-white">Hiệu ứng nền AI</div>
+                      <div className="text-[10px] text-gray-400">Thay đổi hoặc làm mờ nền của bạn</div>
+                    </div>
+                  </div>
+                  {isVirtualBgLoading && (
+                    <div className="text-[10px] text-indigo-400 animate-pulse font-medium">Đang tải AI...</div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button 
+                    onClick={() => handleUpdateBackgroundEffect('none')}
+                    className={`py-2 px-1 text-center rounded-lg border text-xs font-semibold transition-all ${
+                      virtualBg === 'none' 
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
+                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Không có
+                  </button>
+                  <button 
+                    onClick={() => handleUpdateBackgroundEffect('blur')}
+                    className={`py-2 px-1 text-center rounded-lg border text-xs font-semibold transition-all ${
+                      virtualBg === 'blur' 
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
+                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Mờ nền
+                  </button>
+                  <button 
+                    onClick={() => handleUpdateBackgroundEffect('image')}
+                    className={`py-2 px-1 text-center rounded-lg border text-xs font-semibold transition-all ${
+                      virtualBg === 'image' 
+                        ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
+                        : 'bg-gray-950 border-gray-800 text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    Ảnh nền
+                  </button>
+                </div>
+
+                {virtualBg === 'image' && (
+                  <div className="space-y-2 pt-1">
+                    <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Chọn ảnh nền</div>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                      {[
+                        { name: 'Office', url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=640&auto=format&fit=crop' },
+                        { name: 'Study', url: 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=640&auto=format&fit=crop' },
+                        { name: 'Living', url: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?q=80&w=640&auto=format&fit=crop' }
+                      ].map((bg, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleUpdateBackgroundEffect('image', bg.url)}
+                          className={`w-14 h-10 rounded-lg overflow-hidden border shrink-0 relative transition-all ${
+                            selectedBgImage === bg.url ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-gray-800 hover:border-gray-600'
+                          }`}
+                          title={bg.name}
+                        >
+                          <img src={bg.url} alt={bg.name} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Chọn Loa / Output */}
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -1528,6 +2558,25 @@ export default function CallRoom() {
                       <option key={d.deviceId} value={d.deviceId}>{d.label || `Loa (${d.deviceId.slice(0, 5)})`}</option>
                     ))
                   )}
+                </select>
+              </div>
+
+              {/* Giao diện chọn Theme */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5" /> Giao diện cuộc gọi (Theme)
+                </label>
+                <select 
+                  value={theme} 
+                  onChange={e => setTheme(e.target.value)}
+                  className="w-full bg-gray-950 border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 transition-colors"
+                >
+                  <option value="default">Classic Dark (Xanh tím tối)</option>
+                  <option value="cyberpunk">Cyberpunk (Hồng & Cyan)</option>
+                  <option value="sunset">Sunset Glow (Cam ấm hoàng hôn)</option>
+                  <option value="emerald">Emerald Aurora (Xanh ngọc lấp lánh)</option>
+                  <option value="ocean">Ocean Breeze (Xanh đại dương sâu)</option>
+                  <option value="midnight">Midnight Pure (Đen tuyền OLED)</option>
                 </select>
               </div>
             </div>

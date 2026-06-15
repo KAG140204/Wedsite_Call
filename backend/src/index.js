@@ -590,6 +590,30 @@ export class RoomSession {
             videoOn: data.videoOn
           });
         }
+        else if (data.type === 'emoji_reaction') {
+          // Broadcast emoji phản hồi cho tất cả NGOẠI TRỪ người gửi (vì người gửi đã tự hiển thị rồi)
+          this.broadcastExcept(webSocket, {
+            type: 'emoji_reaction',
+            emoji: data.emoji,
+            senderId: userData.id,
+            senderName: userData.name
+          });
+        }
+        else if (data.type === 'screen_share') {
+          this.broadcast({
+            type: 'screen_share',
+            sharing: data.sharing,
+            userName: userData.name
+          });
+        }
+        else if (data.type === 'poll_create' || data.type === 'poll_vote') {
+          // Broadcast khảo sát cho tất cả mọi người
+          this.broadcast({ ...data, userId: userData.id, userName: userData.name });
+        }
+        else if (data.type === 'qa_ask' || data.type === 'qa_upvote' || data.type === 'qa_highlight' || data.type === 'qa_resolve') {
+          // Broadcast Q&A cho tất cả mọi người
+          this.broadcast({ ...data, userId: userData.id, userName: userData.name });
+        }
       } catch (err) {
         console.error(err);
       }
@@ -608,6 +632,15 @@ export class RoomSession {
     const data = JSON.stringify(message);
     for (let ws of this.sessions.keys()) {
       try { ws.send(data); } catch (e) {}
+    }
+  }
+
+  broadcastExcept(excludeWs, message) {
+    const data = JSON.stringify(message);
+    for (let ws of this.sessions.keys()) {
+      if (ws !== excludeWs) {
+        try { ws.send(data); } catch (e) {}
+      }
     }
   }
 }
