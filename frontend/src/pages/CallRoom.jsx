@@ -11,12 +11,25 @@ const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+    const video = videoRef.current;
+    if (video && stream) {
+      video.srcObject = stream;
       
-      // Kích hoạt phát lại chủ động và giải quyết triệt để lỗi Autoplay/Suspended Decoder của trình duyệt di động & PC
-      videoRef.current.play()
-        .catch(err => console.warn("Autoplay blocked or interrupted:", err));
+      const playVideo = () => {
+        video.play().catch(err => {
+          if (err.name !== 'AbortError') {
+            console.warn("Autoplay blocked or interrupted:", err);
+          }
+        });
+      };
+
+      // Đảm bảo video phát lại ngay khi metadata được tải (cần thiết cho iOS Safari & Android Chrome)
+      video.onloadedmetadata = playVideo;
+      playVideo();
+
+      return () => {
+        if (video) video.onloadedmetadata = null;
+      };
     }
   }, [stream, micOn, videoOn]); // Khi đối phương bật/tắt thiết bị, nạp lại stream để ép trình duyệt tái kích hoạt bộ giải mã âm thanh
 
@@ -32,6 +45,7 @@ const VideoPlayer = ({ stream, isMuted, isLocal, sinkId, micOn, videoOn }) => {
       ref={videoRef}
       autoPlay
       playsInline
+      webkit-playsinline="true"
       muted={isMuted || isLocal} // Luôn tắt tiếng video của chính mình để tránh dội âm (Echo)
       className={`w-full h-full object-contain bg-black/80 ${isLocal ? 'scale-x-[-1]' : ''}`} // Thay object-cover thành object-contain để không bị cắt xén
     />
@@ -720,14 +734,28 @@ export default function CallRoom() {
           const isScreenCall = call.metadata?.type === 'screen';
           
           if (isScreenCall) {
-            // Cuộc gọi screen share: chỉ nhận stream, không gửi lại gì
-            call.answer();
+            // Cuộc gọi screen share: Trả lời kèm empty stream để mobile (iOS/Android WebRTC)
+            // hoàn tất đàm phán SDP thành công và kích hoạt sự kiện on('stream')
+            const sharerName = call.metadata?.sharerName || 'Người tham gia';
+            setScreenSharerName(sharerName);
+
+            const emptyAnswerStream = createEmptyStream();
+            call.answer(emptyAnswerStream);
+
             call.on('stream', (screenVideoStream) => {
               setRemoteScreenStream(screenVideoStream);
+              setScreenSharerName(call.metadata?.sharerName || sharerName);
+            });
+            call.on('close', () => {
+              setRemoteScreenStream(null);
+              setScreenSharerName(null);
+            });
+            call.on('error', (err) => {
+              console.warn("Screen call error:", err);
             });
           } else {
             // Cuộc gọi camera/mic bình thường
-            call.answer(localStreamRef.current);
+            call.answer(localStreamRef.current || createEmptyStream());
             call.on('stream', (userVideoStream) => {
               setRemoteStreams(prev => ({ ...prev, [call.peer]: userVideoStream }));
             });
@@ -787,7 +815,13 @@ export default function CallRoom() {
 
               // Nếu mình đang share màn hình, chủ động gọi truyền luồng màn hình cho người mới
               if (isScreenSharingRef.current && screenStreamRef.current && peerRef.current) {
-                peerRef.current.call(data.user.id, screenStreamRef.current, { metadata: { type: 'screen' } });
+                peerRef.current.call(data.user.id, screenStreamRef.current, { 
+                  metadata: { 
+                    type: 'screen',
+                    sharerName: user.name,
+                    sharerId: user.id
+                  } 
+                });
                 
                 // Đồng thời gửi tin nhắn ws thông báo mình đang share màn hình để người mới hiển thị khung chiếu
                 if (ws.readyState === WebSocket.OPEN) {
@@ -1563,27 +1597,58 @@ export default function CallRoom() {
     }
   };
 
+  const stopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
+    }
+    setIsScreenSharing(false);
+    isScreenSharingRef.current = false;
+    setScreenSharerName(null);
+
+    // Thông báo cho tất cả người khác rằng mình ngừng share
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'screen_share', sharing: false }));
+    }
+  };
+
   const toggleScreenShare = async () => {
     try {
-      if (isScreenSharing) {
-        // === TẮT SCREEN SHARE ===
-        // Dừng track màn hình
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach(t => t.stop());
-          screenStreamRef.current = null;
-        }
-        setIsScreenSharing(false);
-        isScreenSharingRef.current = false;
-        setScreenSharerName(null);
-
-        // Thông báo cho tất cả người khác rằng mình ngừng share
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'screen_share', sharing: false }));
-        }
+      if (isScreenSharingRef.current || screenStreamRef.current) {
+        stopScreenShare();
       } else {
         // === BẬT SCREEN SHARE ===
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          alert('Trình duyệt hiện tại không hỗ trợ tính năng chia sẻ màn hình. Trên di động, vui lòng mở trang web bằng Safari (iOS 15.1 trở lên) hoặc Chrome (Android).');
+          return;
+        }
+
+        let screenStream;
+        try {
+          // Chuẩn hỗ trợ tối đa cho cả iOS Safari (15.1+) và Android Chrome
+          screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true
+          });
+        } catch (mediaErr) {
+          if (mediaErr.name === 'NotAllowedError') {
+            // Người dùng hủy hộp thoại chọn màn hình
+            return;
+          }
+          try {
+            // Thử lại với ràng buộc bổ sung nếu trình duyệt hỗ trợ
+            screenStream = await navigator.mediaDevices.getDisplayMedia({
+              video: { cursor: 'always' },
+              audio: false
+            });
+          } catch (retryErr) {
+            if (retryErr.name === 'NotAllowedError') return;
+            throw retryErr;
+          }
+        }
+
+        if (!screenStream) return;
         const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) return;
 
         // Lưu stream màn hình riêng biệt (KHÔNG thay thế camera track)
         screenStreamRef.current = screenStream;
@@ -1594,7 +1659,13 @@ export default function CallRoom() {
         // Gửi luồng màn hình cho tất cả peer hiện có bằng lệnh call mới (metadata đánh dấu là screen)
         if (peerRef.current) {
           participants.forEach(p => {
-            const call = peerRef.current.call(p.id, screenStream, { metadata: { type: 'screen' } });
+            const call = peerRef.current.call(p.id, screenStream, { 
+              metadata: { 
+                type: 'screen',
+                sharerName: user.name,
+                sharerId: user.id
+              } 
+            });
             if (call) {
               call.on('error', err => console.warn('Lỗi gửi screen share cho', p.id, err));
             }
@@ -1603,14 +1674,23 @@ export default function CallRoom() {
 
         // Thông báo cho tất cả người khác rằng mình đang share
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'screen_share', sharing: true }));
+          wsRef.current.send(JSON.stringify({ 
+            type: 'screen_share', 
+            sharing: true,
+            userName: user.name
+          }));
         }
 
-        // Khi người dùng nhấn "Stop sharing" từ trình duyệt
-        screenTrack.onended = () => { toggleScreenShare(); };
+        // Khi người dùng nhấn "Stop sharing" từ trình duyệt hoặc thanh hệ điều hành
+        screenTrack.onended = () => { 
+          stopScreenShare(); 
+        };
       }
     } catch (err) {
       console.error('Screen sharing error:', err);
+      if (err.name !== 'NotAllowedError') {
+        alert('Không thể chia sẻ màn hình: ' + (err.message || 'Lỗi quyền hoặc thiết bị không hỗ trợ'));
+      }
     }
   };
 
@@ -1814,17 +1894,17 @@ export default function CallRoom() {
           )}
           
           {/* Dành riêng cho màn chiếu Screen Share */}
-          {screenSharerName && (screenStreamRef.current || remoteScreenStream) && (
-            <div className="w-full max-w-6xl aspect-video rounded-2xl overflow-hidden bg-black/90 border border-purple-500/30 shadow-2xl relative mb-4">
+          {(screenSharerName || remoteScreenStream) && (screenStreamRef.current || remoteScreenStream) && (
+            <div className="w-full max-w-6xl aspect-video min-h-[220px] rounded-2xl overflow-hidden bg-black/90 border border-purple-500/30 shadow-2xl relative mb-4">
               <VideoPlayer 
-                stream={screenSharerName === user.name ? screenStreamRef.current : remoteScreenStream} 
+                stream={screenSharerName === user.name && screenStreamRef.current ? screenStreamRef.current : (remoteScreenStream || screenStreamRef.current)} 
                 isMuted={true} 
                 isLocal={false} 
                 sinkId={selectedSpeaker} 
               />
               <div className="absolute bottom-3 left-3 bg-purple-900/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-sm font-medium border border-purple-500/20 z-10 flex items-center gap-2">
                 <MonitorUp className="w-4 h-4 text-purple-300 animate-pulse" />
-                <span>Đang trình chiếu: {screenSharerName === user.name ? 'Bạn' : screenSharerName}</span>
+                <span>Đang trình chiếu: {screenSharerName === user.name ? 'Bạn' : (screenSharerName || 'Người tham gia')}</span>
               </div>
             </div>
           )}
@@ -2310,7 +2390,7 @@ export default function CallRoom() {
           transform: `translate(calc(-50% + ${menuPos.x}px), ${menuPos.y}px)`,
           cursor: isDragging ? 'grabbing' : 'grab'
         }}
-        className="fixed bottom-6 left-1/2 h-16 sm:h-20 flex items-center justify-center px-5 sm:px-6 rounded-full bg-gray-950/85 border border-gray-800/80 shadow-2xl backdrop-blur-xl z-40 gap-2.5 sm:gap-4 select-none touch-auto transition-shadow duration-300 hover:shadow-purple-500/10 hover:border-purple-500/20 active:shadow-purple-500/20 active:border-purple-500/30"
+        className="fixed bottom-6 left-1/2 h-16 sm:h-20 flex items-center justify-center px-3.5 sm:px-6 rounded-full bg-gray-950/85 border border-gray-800/80 shadow-2xl backdrop-blur-xl z-40 gap-1.5 sm:gap-4 max-w-[96vw] overflow-x-auto select-none touch-auto transition-shadow duration-300 hover:shadow-purple-500/10 hover:border-purple-500/20 active:shadow-purple-500/20 active:border-purple-500/30"
       >
         {/* Chỉ báo cầm kéo (Draggable Handle indicator) */}
         <div className="flex flex-col gap-0.5 pr-2.5 cursor-grab active:cursor-grabbing select-none shrink-0 border-r border-gray-800 mr-0.5 opacity-40 hover:opacity-100 transition-opacity touch-none">
@@ -2327,7 +2407,7 @@ export default function CallRoom() {
           {videoOn ? <VideoIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" />}
         </button>
         
-        <button onClick={toggleScreenShare} className={`hidden sm:flex w-9 h-9 sm:w-11 sm:h-11 rounded-full items-center justify-center transition-all shadow-md ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-800'}`} title="Chia sẻ màn hình">
+        <button onClick={toggleScreenShare} className={`w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 ${isScreenSharing ? 'bg-purple-600 text-white hover:bg-purple-500' : 'glass-button hover:bg-gray-800'}`} title="Chia sẻ màn hình">
           <MonitorUp className="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5" />
         </button>
         
