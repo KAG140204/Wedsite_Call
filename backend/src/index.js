@@ -231,6 +231,25 @@ app.put('/api/admin/users/:userId/role', adminAuth, async (c) => {
   await logEvent(db, 'ADMIN_CHANGE_ROLE', admin.email, `Đổi role ${target?.email} → ${role}`);
   
   return c.json({ success: true });
+
+// --- Admin Change Password ---
+app.put('/api/admin/users/:userId/password', adminAuth, async (c) => {
+  const userId = c.req.param('userId');
+  const { newPassword } = await c.req.json();
+  const admin = c.get('user');
+  const db = c.env.DB;
+
+  if (!newPassword) return c.json({ error: 'Cần cung cấp mật khẩu mới' }, 400);
+  if (userId === admin.id) return c.json({ error: 'Admin không thể đổi mật khẩu cho mình qua endpoint này' }, 400);
+
+  const hashed = await hashPassword(newPassword);
+  await db.prepare('UPDATE users SET password = ? WHERE id = ?').bind(hashed, userId).run();
+
+  const target = await db.prepare('SELECT email FROM users WHERE id = ?').bind(userId).first();
+  await logEvent(db, 'ADMIN_CHANGE_PASSWORD', admin.email, `Đổi mật khẩu cho ${target?.email}`);
+
+  return c.json({ success: true });
+});
 });
 
 // --- Admin Report (Date Range) ---
