@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import AdminRoute from './components/AdminRoute';
 import Register from './pages/Register';
 import CallRoom from './pages/CallRoom';
 import AdminDashboard from './pages/AdminDashboard';
@@ -37,7 +38,7 @@ function AppRoutes() {
         <Route path="/home" element={<PrivateRoute><Home /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
         <Route path="/room/:roomId" element={<PrivateRoute><CallRoom /></PrivateRoute>} />
-        <Route path="/admin" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
+        <Route path="/admin" element={<PrivateRoute><AdminRoute><AdminDashboard /></AdminRoute></PrivateRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

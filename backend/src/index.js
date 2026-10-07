@@ -231,6 +231,7 @@ app.put('/api/admin/users/:userId/role', adminAuth, async (c) => {
   await logEvent(db, 'ADMIN_CHANGE_ROLE', admin.email, `Đổi role ${target?.email} → ${role}`);
   
   return c.json({ success: true });
+});
 
 // --- Admin Change Password ---
 app.put('/api/admin/users/:userId/password', adminAuth, async (c) => {
@@ -249,7 +250,6 @@ app.put('/api/admin/users/:userId/password', adminAuth, async (c) => {
   await logEvent(db, 'ADMIN_CHANGE_PASSWORD', admin.email, `Đổi mật khẩu cho ${target?.email}`);
 
   return c.json({ success: true });
-});
 });
 
 // --- Admin Report (Date Range) ---
